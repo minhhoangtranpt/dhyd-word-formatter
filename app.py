@@ -3,6 +3,16 @@ import docx
 from docx.shared import Cm, Pt
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 import io
+import re
+
+# ==========================================
+# HÀM LÀM SẠCH SỐ THỨ TỰ CŨ (TRÁNH LẶP SỐ)
+# ==========================================
+def clean_heading_text(text):
+    """Xóa các đánh số thủ công cũ ở đầu dòng (VD: 'Chương 1.', '1.1 ', '1.1.2. ')"""
+    # Xóa chữ "Chương X" hoặc các cụm số như "1.1.", "1.2.3" nằm ở đầu câu
+    cleaned = re.sub(r'^(Chương\s*\d+\.?|\d+(\.\d+)*)\s*[\.\-\:]?\s*', '', text, flags=re.IGNORECASE)
+    return cleaned.strip()
 
 # ==========================================
 # HÀM XỬ LÝ ĐỊNH DẠNG THEO CHUẨN ĐHYD TP.HCM
@@ -15,37 +25,88 @@ def format_thesis_dhyd(doc):
         section.left_margin = Cm(3.5)
         section.right_margin = Cm(2.0)
         
-    # 2. Định dạng Font Normal mặc định toàn bài
-    style = doc.styles['Normal']
-    font = style.font
-    font.name = 'Times New Roman'
-    font.size = Pt(13)
+    # 2. Khởi tạo các biến đếm để đánh số tự động
+    h1_num = 0 # Đếm số Chương
+    h2_num = 0 # Đếm số Mục (1.1, 1.2)
+    h3_num = 0 # Đếm số Tiểu mục (1.1.1, 1.1.2)
     
-    # 3. Quét qua các đoạn văn để ép chuẩn Giãn dòng và Canh lề
+    # 3. Quét qua toàn bộ đoạn văn trong file
     for paragraph in doc.paragraphs:
         style_name = paragraph.style.name
         
-        # Xử lý đoạn văn bản thường (Normal)
-        if style_name == 'Normal':
-            paragraph.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY # Căn lề hai bên
-            paragraph.paragraph_format.line_spacing = 1.5    # Giãn dòng 1.5
-            paragraph.paragraph_format.first_line_indent = Cm(1.27) # Thụt đầu dòng 1 tab
+        # --- ÉP 100% VỀ FONT TIMES NEW ROMAN ---
+        # Quét qua từng đoạn chữ nhỏ để ép font (Xóa bỏ lỗi sai font do copy-paste)
+        for run in paragraph.runs:
+            run.font.name = 'Times New Roman'
             
-        # Xử lý Tiêu đề Chương (Heading 1)
-        elif style_name == 'Heading 1':
-            paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER # Căn giữa khổ giấy
-            paragraph.paragraph_format.first_line_indent = Cm(0) # Không thụt đầu dòng
+        # Lấy toàn bộ nội dung chữ của dòng hiện tại
+        full_text = "".join([run.text for run in paragraph.runs])
+        if not full_text.strip():
+            continue # Bỏ qua các dòng trống không có chữ
+
+        # --- XỬ LÝ TIÊU ĐỀ CHƯƠNG (HEADING 1) ---
+        if style_name == 'Heading 1':
+            h1_num += 1
+            h2_num = 0 # Chuyển sang chương mới thì reset đếm mục con về 0
+            h3_num = 0
+            
+            clean_text = clean_heading_text(full_text)
+            new_text = f"Chương {h1_num}. {clean_text}".upper() # VD: CHƯƠNG 1. TỔNG QUAN
+            
+            # Xóa các khối chữ cũ, thay bằng chữ mới đã đánh số
+            for run in paragraph.runs: run.text = "" 
+            new_run = paragraph.add_run(new_text)
+            new_run.font.bold = True
+            new_run.font.name = 'Times New Roman'
+            new_run.font.size = Pt(14)
+            
+            paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            paragraph.paragraph_format.first_line_indent = Cm(0)
+
+        # --- XỬ LÝ TIỂU MỤC CẤP 1 (HEADING 2) ---
+        elif style_name == 'Heading 2':
+            if h1_num == 0: h1_num = 1 # Đề phòng file gốc quên chọn Heading 1 cho chương đầu
+            h2_num += 1
+            h3_num = 0 # Reset tiểu mục nhỏ
+            
+            clean_text = clean_heading_text(full_text)
+            new_text = f"{h1_num}.{h2_num}. {clean_text}" # VD: 1.1. Đặt vấn đề
+            
+            for run in paragraph.runs: run.text = ""
+            new_run = paragraph.add_run(new_text)
+            new_run.font.bold = True
+            new_run.font.name = 'Times New Roman'
+            new_run.font.size = Pt(13)
+            
+            paragraph.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
+            paragraph.paragraph_format.first_line_indent = Cm(0)
+            
+        # --- XỬ LÝ TIỂU MỤC CẤP 2 (HEADING 3) ---
+        elif style_name == 'Heading 3':
+            if h1_num == 0: h1_num = 1
+            if h2_num == 0: h2_num = 1
+            h3_num += 1
+            
+            clean_text = clean_heading_text(full_text)
+            new_text = f"{h1_num}.{h2_num}.{h3_num}. {clean_text}" # VD: 1.1.1. Bối cảnh
+            
+            for run in paragraph.runs: run.text = ""
+            new_run = paragraph.add_run(new_text)
+            new_run.font.bold = True
+            new_run.font.name = 'Times New Roman'
+            new_run.font.size = Pt(13)
+            
+            paragraph.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
+            paragraph.paragraph_format.first_line_indent = Cm(0)
+
+        # --- XỬ LÝ VĂN BẢN THƯỜNG (NORMAL) ---
+        elif style_name == 'Normal':
+            paragraph.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
+            paragraph.paragraph_format.line_spacing = 1.5
+            paragraph.paragraph_format.first_line_indent = Cm(1.27)
+            # Ép luôn kích cỡ 13 cho toàn bộ chữ thường
             for run in paragraph.runs:
-                run.font.bold = True
-                run.text = run.text.upper() # Ép viết hoa
-                
-        # Xử lý Tiểu mục (Heading 2, 3...)
-        elif style_name.startswith('Heading') and style_name != 'Heading 1':
-            paragraph.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY # Căn lề đều 2 bên
-            paragraph.paragraph_format.first_line_indent = Cm(0) # Không thụt dòng
-            for run in paragraph.runs:
-                run.font.bold = True # In đậm
-                run.font.size = Pt(13) # Cỡ chữ 13
+                run.font.size = Pt(13)
                 
     return doc
 
@@ -55,31 +116,24 @@ def format_thesis_dhyd(doc):
 st.set_page_config(page_title="Định dạng Luận văn ĐHYD", page_icon="🎓")
 
 st.title("🎓 Công cụ Hỗ trợ Định dạng Luận văn")
-st.write("**Tự động căn chỉnh file Word theo thể thức quy định của Đại học Y Dược TP.HCM.**")
+st.write("**Tự động căn chỉnh file Word, ép font Times New Roman và đánh số mục tự động.**")
 
-# Tạo hộp thoại tải file lên
 uploaded_file = st.file_uploader("Vui lòng tải file Word (.docx) của bạn lên đây:", type=["docx"])
 
 if uploaded_file is not None:
     st.info("Đã ghi nhận file. Bấm nút bên dưới để hệ thống bắt đầu tự động căn chỉnh!")
     
-    # Nút bấm để chạy lệnh
     if st.button("✨ Bắt đầu chuẩn hóa định dạng", type="primary"):
-        with st.spinner('Hệ thống đang xử lý, vui lòng đợi...'):
+        with st.spinner('Hệ thống đang phân tích và định dạng lại nội dung...'):
             try:
-                # Đọc file Word được tải lên
                 doc = docx.Document(uploaded_file)
-                
-                # Gọi hàm xử lý định dạng
                 formatted_doc = format_thesis_dhyd(doc)
                 
-                # Lưu file đã xử lý vào bộ nhớ tạm (RAM) để chuẩn bị tải xuống
                 bio = io.BytesIO()
                 formatted_doc.save(bio)
                 
-                st.success("🎉 Đã định dạng thành công!")
+                st.success("🎉 Đã định dạng và đánh số tự động thành công!")
                 
-                # Hiển thị nút tải file về máy
                 st.download_button(
                     label="⬇️ TẢI FILE ĐÃ ĐỊNH DẠNG VỀ MÁY",
                     data=bio.getvalue(),
