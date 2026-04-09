@@ -3,170 +3,139 @@ import docx
 from docx.shared import Cm, Pt
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 import io
-import re
 
 # ==========================================
-# HÀM LÀM SẠCH VÀ LẤY TÊN TIÊU ĐỀ GỐC
+# CẤU HÌNH TRANG WEB
 # ==========================================
-def extract_title_name(text):
-    """Xóa bỏ các chữ 'Chương 1', '1.1.' gõ tay, chỉ giữ lại nội dung chính."""
-    # Xóa "Chương X:", "Chương X.", "Chương X "
-    text = re.sub(r'^Chương\s+[0-9IVX]+\s*[\.\-\:]?\s*', '', text, flags=re.IGNORECASE)
-    # Xóa các cụm số như "1.1.", "1.2.3", "1.1 "
-    text = re.sub(r'^\d+(\.\d+)*\s*[\.\-\:]?\s*', '', text)
-    return text.strip()
+st.set_page_config(page_title="Tạo Luận văn Chuẩn", page_icon="📝", layout="centered")
+
+st.title("📝 Trình Tạo Luận Văn Chuẩn")
+st.write("Nhập hoặc dán nội dung vào các ô bên dưới. Hệ thống sẽ tự động ghép lại và tạo ra một file Word hoàn chỉnh, chuẩn lề, chuẩn font 100%.")
+st.divider()
 
 # ==========================================
-# HÀM XỬ LÝ ĐỊNH DẠNG THEO CHUẨN ĐHYD TP.HCM
+# GIAO DIỆN NHẬP LIỆU
 # ==========================================
-def format_thesis_dhyd(doc):
-    # 1. Căn lề khổ giấy
-    for section in doc.sections:
-        section.top_margin = Cm(3.5)
-        section.bottom_margin = Cm(3.0)
-        section.left_margin = Cm(3.5)
-        section.right_margin = Cm(2.0)
-        
-    h1_num = 0
-    h2_num = 0
-    h3_num = 0
+st.header("1. Thông tin chung")
+thesis_title = st.text_input("Tên Đề tài Luận văn:", placeholder="Ví dụ: SO SÁNH ĐỘNG LỰC HỌC...")
+author_name = st.text_input("Họ và tên tác giả:", placeholder="Ví dụ: TRẦN MINH HOÀNG")
+
+st.header("2. Cấu trúc Nội dung")
+st.info("💡 Chọn số lượng Chương. Hệ thống sẽ tạo ra các ô nhập liệu tương ứng bên dưới.")
+num_chapters = st.number_input("Số lượng Chương:", min_value=1, max_value=10, value=3, step=1)
+
+chapters_data = []
+
+# Vòng lặp tạo giao diện nhập liệu động cho từng Chương và Mục
+for i in range(num_chapters):
+    st.subheader(f"CHƯƠNG {i+1}")
+    chap_title = st.text_input(f"Tên CHƯƠNG {i+1}:", key=f"chap_title_{i}", placeholder="Ví dụ: TỔNG QUAN Y VĂN")
     
-    # 2. Xử lý phần văn bản chính (Các đoạn văn)
-    for paragraph in doc.paragraphs:
-        full_text = paragraph.text.strip()
-        if not full_text:
-            continue
+    num_sections = st.number_input(f"Số lượng mục con trong CHƯƠNG {i+1}:", min_value=1, max_value=20, value=2, step=1, key=f"num_sec_{i}")
+    
+    sections_data = []
+    for j in range(num_sections):
+        with st.expander(f"Mục {i+1}.{j+1}", expanded=True):
+            sec_title = st.text_input(f"Tên mục {i+1}.{j+1}:", key=f"sec_title_{i}_{j}", placeholder="Ví dụ: Tác vụ ngồi sang đứng")
+            sec_content = st.text_area(f"Nội dung mục {i+1}.{j+1} (Dán văn bản vào đây):", height=200, key=f"sec_content_{i}_{j}")
             
-        style_name = paragraph.style.name
+            sections_data.append({
+                "title": sec_title,
+                "content": sec_content
+            })
+            
+    chapters_data.append({
+        "title": chap_title,
+        "sections": sections_data
+    })
 
-        # --- ĐIỀU KIỆN NHẬN DIỆN THÔNG MINH ---
-        is_chapter = style_name == 'Heading 1' or re.match(r'^chương\s+[0-9ivx]+', full_text, re.IGNORECASE)
-        is_h2 = style_name == 'Heading 2' or re.match(r'^\d+\.\d+[\.\s]', full_text)
-        is_h3 = style_name == 'Heading 3' or re.match(r'^\d+\.\d+\.\d+[\.\s]', full_text)
-        # Nhận diện tên Bảng hoặc Hình (Ví dụ: "Bảng 3.1.1.", "Hình 1.1")
-        is_table_fig_title = re.match(r'^(Bảng|Hình|Biểu đồ)\s+\d+', full_text, re.IGNORECASE)
-
-        # --- XỬ LÝ CHƯƠNG ---
-        if is_chapter:
-            h1_num += 1
-            h2_num = 0
-            h3_num = 0
-            
-            clean_title = extract_title_name(full_text)
-            # Mẫu khóa luận dùng dấu hai chấm (:) sau số Chương
-            new_text = f"CHƯƠNG {h1_num}: {clean_title}".upper()
-            
-            paragraph.style = 'Heading 1'
-            paragraph.text = new_text
-            
-            for run in paragraph.runs:
-                run.font.bold = True
-                run.font.name = 'Times New Roman'
-                run.font.size = Pt(14)
-            paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
-            paragraph.paragraph_format.first_line_indent = Cm(0)
-
-        # --- XỬ LÝ MỤC 1.1 ---
-        elif is_h2:
-            if h1_num == 0: h1_num = 1 
-            h2_num += 1
-            h3_num = 0
-            
-            clean_title = extract_title_name(full_text)
-            new_text = f"{h1_num}.{h2_num}. {clean_title}"
-            
-            paragraph.style = 'Heading 2'
-            paragraph.text = new_text
-            
-            for run in paragraph.runs:
-                run.font.bold = True
-                run.font.name = 'Times New Roman'
-                run.font.size = Pt(13)
-            paragraph.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
-            paragraph.paragraph_format.first_line_indent = Cm(0)
-            
-        # --- XỬ LÝ MỤC 1.1.1 ---
-        elif is_h3:
-            if h1_num == 0: h1_num = 1
-            if h2_num == 0: h2_num = 1
-            h3_num += 1
-            
-            clean_title = extract_title_name(full_text)
-            new_text = f"{h1_num}.{h2_num}.{h3_num}. {clean_title}"
-            
-            paragraph.style = 'Heading 3'
-            paragraph.text = new_text
-            
-            for run in paragraph.runs:
-                run.font.bold = True
-                run.font.name = 'Times New Roman'
-                run.font.size = Pt(13)
-            paragraph.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
-            paragraph.paragraph_format.first_line_indent = Cm(0)
-
-        # --- XỬ LÝ TÊN BẢNG / HÌNH ẢNH ---
-        elif is_table_fig_title:
-            paragraph.style = 'Normal'
-            paragraph.alignment = WD_ALIGN_PARAGRAPH.LEFT
-            paragraph.paragraph_format.first_line_indent = Cm(0) # Không thụt đầu dòng
-            paragraph.paragraph_format.line_spacing = 1.5
-            for run in paragraph.runs:
-                run.font.name = 'Times New Roman'
-                run.font.size = Pt(13)
-                run.font.bold = True # In đậm tên bảng
-
-        # --- XỬ LÝ CHỮ THƯỜNG (CÒN LẠI) ---
-        else:
-            paragraph.style = 'Normal'
-            paragraph.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
-            paragraph.paragraph_format.line_spacing = 1.5
-            paragraph.paragraph_format.first_line_indent = Cm(1.27)
-            
-            for run in paragraph.runs:
-                run.font.name = 'Times New Roman'
-                run.font.size = Pt(13)
-
-    # 3. XỬ LÝ CHỮ BÊN TRONG CÁC BẢNG BIỂU (TABLES)
-    for table in doc.tables:
-        for row in table.rows:
-            for cell in row.cells:
-                for paragraph in cell.paragraphs:
-                    paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER # Có thể đổi thành LEFT tùy ý
-                    paragraph.paragraph_format.first_line_indent = Cm(0) # Tuyệt đối không thụt đầu dòng trong bảng
-                    paragraph.paragraph_format.line_spacing = 1.0 # Giãn dòng đơn cho bảng đỡ bị phình to
-                    for run in paragraph.runs:
-                        run.font.name = 'Times New Roman'
-                        run.font.size = Pt(12) # Chữ trong bảng nên nhỏ hơn một chút (size 11 hoặc 12)
-
-    return doc
+st.divider()
 
 # ==========================================
-# GIAO DIỆN WEB BẰNG STREAMLIT
+# NÚT XỬ LÝ VÀ TẠO FILE WORD
 # ==========================================
-st.set_page_config(page_title="Định dạng Luận văn ĐHYD", page_icon="🎓")
+if st.button("✨ TẠO FILE WORD HOÀN CHỈNH", type="primary", use_container_width=True):
+    if not thesis_title:
+        st.warning("⚠️ Vui lòng nhập Tên Đề tài trước khi tạo file!")
+    else:
+        with st.spinner("Hệ thống đang biên dịch và dàn trang file Word..."):
+            # 1. Khởi tạo file Word trắng
+            doc = docx.Document()
+            
+            # 2. Căn lề khổ giấy chuẩn
+            for section in doc.sections:
+                section.top_margin = Cm(3.5)
+                section.bottom_margin = Cm(3.0)
+                section.left_margin = Cm(3.5)
+                section.right_margin = Cm(2.0)
 
-st.title("🎓 Công cụ Hỗ trợ Định dạng Luận văn")
-st.write("**Hệ thống tự động canh lề, ép font Times New Roman, xử lý bảng biểu và đánh số mục thông minh.**")
+            # 3. Ép chuẩn Normal Style
+            style_normal = doc.styles['Normal']
+            style_normal.font.name = 'Times New Roman'
+            style_normal.font.size = Pt(13)
 
-uploaded_file = st.file_uploader("Vui lòng tải file Word (.docx) của bạn lên đây:", type=["docx"])
+            # 4. Ghi tiêu đề ảo lên đầu file (Sinh viên có thể copy trang bìa thật vào sau)
+            p_title = doc.add_paragraph()
+            p_title.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            r_title = p_title.add_run(thesis_title.upper())
+            r_title.bold = True
+            r_title.font.name = 'Times New Roman'
+            r_title.font.size = Pt(16)
+            
+            p_author = doc.add_paragraph()
+            p_author.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            r_author = p_author.add_run(author_name.upper())
+            r_author.bold = True
+            r_author.font.name = 'Times New Roman'
+            
+            doc.add_page_break() # Sang trang mới bắt đầu nội dung
 
-if uploaded_file is not None:
-    if st.button("✨ Bắt đầu chuẩn hóa định dạng", type="primary"):
-        with st.spinner('Hệ thống đang phân tích và định dạng lại nội dung...'):
-            try:
-                doc = docx.Document(uploaded_file)
-                formatted_doc = format_thesis_dhyd(doc)
+            # 5. Dàn trang từng Chương
+            for i, chap in enumerate(chapters_data):
+                # Tên Chương (In đậm, viết hoa, ra giữa)
+                p_chap = doc.add_paragraph()
+                p_chap.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                r_chap = p_chap.add_run(f"CHƯƠNG {i+1}: {chap['title']}".upper())
+                r_chap.bold = True
+                r_chap.font.name = 'Times New Roman'
+                r_chap.font.size = Pt(14)
                 
-                bio = io.BytesIO()
-                formatted_doc.save(bio)
+                # Các Mục con
+                for j, sec in enumerate(chap['sections']):
+                    # Tên Mục (Ví dụ: 1.1. Tác vụ ngồi sang đứng)
+                    p_sec = doc.add_paragraph()
+                    p_sec.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
+                    r_sec = p_sec.add_run(f"{i+1}.{j+1}. {sec['title']}")
+                    r_sec.bold = True
+                    r_sec.font.name = 'Times New Roman'
+                    r_sec.font.size = Pt(13)
+                    
+                    # Nội dung Mục (Cắt theo dấu Enter để phân đoạn)
+                    paragraphs = sec['content'].split('\n')
+                    for para_text in paragraphs:
+                        if para_text.strip(): # Bỏ qua các dòng trống
+                            p_text = doc.add_paragraph()
+                            p_text.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
+                            p_text.paragraph_format.line_spacing = 1.5
+                            p_text.paragraph_format.first_line_indent = Cm(1.27)
+                            
+                            r_text = p_text.add_run(para_text.strip())
+                            r_text.font.name = 'Times New Roman'
+                            r_text.font.size = Pt(13)
                 
-                st.success("🎉 Đã định dạng và đồng bộ phong cách thành công!")
-                
-                st.download_button(
-                    label="⬇️ TẢI FILE ĐÃ ĐỊNH DẠNG VỀ MÁY",
-                    data=bio.getvalue(),
-                    file_name="Luan_Van_Da_Chuan_Hoa.docx",
-                    mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-                )
-            except Exception as e:
-                st.error(f"Có lỗi xảy ra trong quá trình xử lý: {e}")
+                # Hết một chương thì qua trang mới (Trừ chương cuối cùng)
+                if i < len(chapters_data) - 1:
+                    doc.add_page_break()
+
+            # 6. Lưu file vào bộ nhớ và cho tải về
+            bio = io.BytesIO()
+            doc.save(bio)
+            
+            st.success("🎉 Đã tạo file thành công! Bạn có thể tải về ngay bên dưới.")
+            st.download_button(
+                label="⬇️ TẢI FILE LUẬN VĂN (.docx)",
+                data=bio.getvalue(),
+                file_name="Luan_Van_Hoan_Chinh.docx",
+                mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                use_container_width=True
+            )
