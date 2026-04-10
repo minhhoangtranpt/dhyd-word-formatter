@@ -271,7 +271,8 @@ def add_main_heading(doc, text):
         
     p.alignment = WD_ALIGN_PARAGRAPH.CENTER
     r = p.runs[0] if p.runs else p.add_run()
-    r.text = text.upper()
+    # Chỉnh sửa: Gỡ bỏ lệnh .upper() để giữ nguyên cấu trúc truyền vào (Chương 1. thay vì CHƯƠNG 1.)
+    r.text = text 
     r.bold, r.font.name, r.font.size = True, 'Times New Roman', Pt(14)
     r.font.color.rgb = RGBColor(0, 0, 0) 
 
@@ -359,7 +360,6 @@ if st.button("✨ TẠO FILE WORD HOÀN CHỈNH", type="primary", use_container_
 
             doc = docx.Document()
             
-            # Cấu hình lại Style TOC cho chuẩn quy định
             setup_toc_styles(doc)
             
             style_normal = doc.styles['Normal']
@@ -461,7 +461,6 @@ if st.button("✨ TẠO FILE WORD HOÀN CHỈNH", type="primary", use_container_
             new_section_prelim = doc.add_section(WD_SECTION.NEW_PAGE)
             clear_page_border(new_section_prelim._sectPr)
             
-            # Bật đánh số trang và gán định dạng La Mã viết thường
             new_section_prelim.header.is_linked_to_previous = False
             header_para = new_section_prelim.header.paragraphs[0]
             header_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
@@ -505,7 +504,6 @@ if st.button("✨ TẠO FILE WORD HOÀN CHỈNH", type="primary", use_container_
             new_section_content = doc.add_section(WD_SECTION.NEW_PAGE)
             clear_page_border(new_section_content._sectPr)
             
-            # Chỉnh lại bộ đếm về dạng số Ả Rập, bắt đầu lại từ số 1
             new_section_content.header.is_linked_to_previous = False
             header_para_main = new_section_content.header.paragraphs[0]
             header_para_main.alignment = WD_ALIGN_PARAGRAPH.CENTER
@@ -518,8 +516,8 @@ if st.button("✨ TẠO FILE WORD HOÀN CHỈNH", type="primary", use_container_
                 doc.add_page_break()
 
             for i, chap in enumerate(all_chapters):
-                # Chuẩn hóa tên Chương (Ví dụ: CHƯƠNG 1. TỔNG QUAN TÀI LIỆU) thay vì dùng dấu hai chấm
-                add_main_heading(doc, f"CHƯƠNG {i+1}. {chap['title']}")
+                # Lưu ý: Cú pháp in Chương đã được điều chỉnh chỉ viết hoa chữ C
+                add_main_heading(doc, f"Chương {i+1}. {chap['title']}")
                 add_normal_text(doc, chap['content'])
                 write_sections_to_word(doc, chap['children'], [str(i+1)])
                 doc.add_page_break()
