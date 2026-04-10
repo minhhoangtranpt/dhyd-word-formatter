@@ -12,14 +12,13 @@ import io
 st.set_page_config(page_title="Tạo Đề Cương Luận Văn", page_icon="🎓", layout="centered")
 
 st.title("🎓 Trình Tạo Đề Cương Luận Văn Chuẩn")
-st.write("Hệ thống tự động dàn trang bìa chính, trang bìa phụ (có khung viền) và ép chuẩn font toàn bộ nội dung.")
+st.write("Hệ thống tự động dàn trang, ép chuẩn font và cấu trúc 4 chương, đánh số trang tự động.")
 st.divider()
 
 # ==========================================
-# CÁC HÀM CAN THIỆP XML (ĐÓNG KHUNG TRANG BÌA)
+# CÁC HÀM CAN THIỆP XML 
 # ==========================================
 def add_page_border(sect_pr):
-    """Vẽ khung viền cho trang"""
     borders = OxmlElement('w:pgBorders')
     borders.set(qn('w:offsetFrom'), 'text')
     for border_name in ['top', 'left', 'bottom', 'right']:
@@ -32,9 +31,32 @@ def add_page_border(sect_pr):
     sect_pr.append(borders)
 
 def clear_page_border(sect_pr):
-    """Xóa khung viền ở các trang sau"""
     for borders in sect_pr.xpath('./w:pgBorders'):
         sect_pr.remove(borders)
+
+def add_page_number(paragraph):
+    """Chèn số trang động vào đoạn văn (dùng cho Header)"""
+    p = paragraph._p
+    run = OxmlElement('w:r')
+    
+    fldChar1 = OxmlElement('w:fldChar')
+    fldChar1.set(qn('w:fldCharType'), 'begin')
+    
+    instrText = OxmlElement('w:instrText')
+    instrText.set(qn('xml:space'), 'preserve')
+    instrText.text = "PAGE"
+    
+    fldChar2 = OxmlElement('w:fldChar')
+    fldChar2.set(qn('w:fldCharType'), 'separate')
+    
+    fldChar3 = OxmlElement('w:fldChar')
+    fldChar3.set(qn('w:fldCharType'), 'end')
+    
+    run.append(fldChar1)
+    run.append(instrText)
+    run.append(fldChar2)
+    run.append(fldChar3)
+    p.append(run)
 
 # ==========================================
 # HÀM ĐỆ QUY TẠO GIAO DIỆN NHẬP LIỆU
@@ -54,9 +76,6 @@ def render_section(level, prefix, key_prefix):
                 
     return {"title": title, "content": content, "children": children}
 
-# ==========================================
-# THUẬT TOÁN TỈA CÂY
-# ==========================================
 def apply_academic_rules(node):
     if node.get("children"):
         pruned_children = [apply_academic_rules(c) for c in node["children"]]
@@ -92,26 +111,44 @@ st.header("II. NỘI DUNG")
 st.subheader("ĐẶT VẤN ĐỀ")
 dat_van_de_content = st.text_area("Nội dung phần Đặt vấn đề:", height=200, key="dvd")
 
-fixed_chapters = [
-    "TỔNG QUAN TÀI LIỆU",
-    "ĐỐI TƯỢNG VÀ PHƯƠNG PHÁP NGHIÊN CỨU",
-    "KẾT QUẢ"
+# --- CHƯƠNG 1 ---
+st.markdown("### Chương 1. TỔNG QUAN TÀI LIỆU")
+c1_intro = st.text_area("Nội dung dẫn nhập Chương 1 (nếu có):", height=100, key="c1_intro")
+c1_num = st.number_input("Số lượng mục cấp 2 (ví dụ: 1.1, 1.2):", min_value=0, max_value=20, value=2, step=1, key="c1_num")
+c1_children = [render_section(2, f"1.{j+1}", f"c1_sec_{j}") for j in range(c1_num)]
+st.write("---")
+
+# --- CHƯƠNG 2 (CỐ ĐỊNH 9 MỤC) ---
+st.markdown("### Chương 2. PHƯƠNG PHÁP NGHIÊN CỨU")
+c2_intro = st.text_area("Nội dung dẫn nhập Chương 2 (nếu có):", height=100, key="c2_intro")
+c2_fixed_titles = [
+    "Thiết kế nghiên cứu", "Thời gian và địa điểm nghiên cứu", "Đối tượng nghiên cứu", 
+    "Cỡ mẫu của nghiên cứu", "Xác định các biến số độc lập và phụ thuộc", 
+    "Phương pháp và công cụ đo lường, thu thập số liệu", "Quy trình nghiên cứu", 
+    "Phương pháp phân tích dữ liệu", "Đạo đức trong nghiên cứu"
 ]
-chapters_data = []
+c2_children = []
+for j, title in enumerate(c2_fixed_titles):
+    with st.expander(f"Mục 2.{j+1}. {title}", expanded=True):
+        c2_content = st.text_area(f"Nội dung mục 2.{j+1}:", height=150, key=f"c2_sec_{j}")
+        c2_children.append({"title": title, "content": c2_content, "children": []}) # C2 không tạo cây con để giữ chuẩn khung
+st.write("---")
 
-for i, chap_name in enumerate(fixed_chapters):
-    st.markdown(f"### Chương {i+1}. {chap_name}")
-    chap_content = st.text_area(f"Nội dung dẫn nhập Chương {i+1} (nếu có):", height=100, key=f"chap_intro_{i}")
-    num_sections = st.number_input(f"Số lượng mục cấp 2 (ví dụ: {i+1}.1, {i+1}.2):", min_value=0, max_value=20, value=2, step=1, key=f"num_sec_l2_{i}")
-    l2_children = []
-    for j in range(num_sections):
-        prefix = f"{i+1}.{j+1}"
-        l2_children.append(render_section(2, prefix, f"chap_{i}_sec_{j}"))
-    chapters_data.append({"title": chap_name, "content": chap_content, "children": l2_children})
-    st.write("---")
+# --- CHƯƠNG 3 ---
+st.markdown("### Chương 3. DỰ KIẾN KẾT QUẢ")
+c3_intro = st.text_area("Nội dung dẫn nhập Chương 3 (nếu có):", height=100, key="c3_intro")
+c3_num = st.number_input("Số lượng mục cấp 2 (ví dụ: 3.1, 3.2):", min_value=0, max_value=20, value=2, step=1, key="c3_num")
+c3_children = [render_section(2, f"3.{j+1}", f"c3_sec_{j}") for j in range(c3_num)]
+st.write("---")
 
-st.subheader("KẾT LUẬN VÀ KIẾN NGHỊ")
-ket_luan_content = st.text_area("Nội dung Kết luận và Kiến nghị:", height=200, key="kl")
+# --- CHƯƠNG 4 ---
+st.markdown("### Chương 4. KẾ HOẠCH THỰC HIỆN")
+c4_intro = st.text_area("Nội dung dẫn nhập Chương 4 (nếu có):", height=100, key="c4_intro")
+c4_num = st.number_input("Số lượng mục cấp 2 (ví dụ: 4.1, 4.2):", min_value=0, max_value=20, value=1, step=1, key="c4_num")
+c4_children = [render_section(2, f"4.{j+1}", f"c4_sec_{j}") for j in range(c4_num)]
+st.write("---")
+
+# Các phần cuối
 st.subheader("DANH MỤC CÁC CÔNG TRÌNH CÔNG BỐ CÓ LIÊN QUAN")
 danh_muc_content = st.text_area("Nội dung (Nếu không có hãy để trống):", height=150, key="dm")
 st.subheader("TÀI LIỆU THAM KHẢO")
@@ -167,7 +204,6 @@ def write_sections_to_word(doc, children_list, prefix_list):
                 write_sections_to_word(doc, child["children"], current_prefix)
 
 def render_cover_header_and_title(doc, author_name, thesis_title, author_space=4):
-    """Hàm gộp dùng chung cho cả 2 trang bìa. Biến author_space giúp tùy chỉnh dòng trống."""
     table = doc.add_table(rows=1, cols=2)
     p_left = table.cell(0, 0).paragraphs[0]
     p_left.alignment = WD_ALIGN_PARAGRAPH.LEFT
@@ -184,7 +220,6 @@ def render_cover_header_and_title(doc, author_name, thesis_title, author_space=4
     r = p.add_run("ĐẠI HỌC Y DƯỢC THÀNH PHỐ HỒ CHÍ MINH")
     r.bold, r.font.name, r.font.size = True, 'Times New Roman', Pt(16)
     
-    # Số dòng trống phụ thuộc vào biến truyền vào (Bìa 1 là 4 dòng, Bìa 2 là 2 dòng)
     add_empty_lines(doc, author_space)
     
     p = doc.add_paragraph()
@@ -204,10 +239,15 @@ def render_cover_header_and_title(doc, author_name, thesis_title, author_space=4
 # ==========================================
 if st.button("✨ TẠO FILE WORD HOÀN CHỈNH", type="primary", use_container_width=True):
     if not thesis_title or not supervisor_1:
-        st.warning("⚠️ Vui lòng nhập Tên Đề tài và ít nhất 1 Người hướng dẫn ở phần Thông tin bìa!")
+        st.warning("⚠️ Vui lòng nhập Tên Đề tài và ít nhất 1 Người hướng dẫn!")
     else:
-        with st.spinner("Đang biên dịch trang bìa chính, bìa phụ và dàn trang nội dung..."):
-            processed_chapters = [apply_academic_rules(chap) for chap in chapters_data]
+        with st.spinner("Đang dàn trang, đánh số tự động và thiết lập Header..."):
+            # Lọc nội dung các chương 1, 3, 4 theo chuẩn học thuật
+            c1_processed = {"title": "TỔNG QUAN TÀI LIỆU", "content": c1_intro, "children": [apply_academic_rules(c) for c in c1_children]}
+            c2_processed = {"title": "PHƯƠNG PHÁP NGHIÊN CỨU", "content": c2_intro, "children": c2_children} # C2 không cần lọc
+            c3_processed = {"title": "DỰ KIẾN KẾT QUẢ", "content": c3_intro, "children": [apply_academic_rules(c) for c in c3_children]}
+            c4_processed = {"title": "KẾ HOẠCH THỰC HIỆN", "content": c4_intro, "children": [apply_academic_rules(c) for c in c4_children]}
+            all_chapters = [c1_processed, c2_processed, c3_processed, c4_processed]
 
             doc = docx.Document()
             style_normal = doc.styles['Normal']
@@ -216,23 +256,20 @@ if st.button("✨ TẠO FILE WORD HOÀN CHỈNH", type="primary", use_container_
             title_lines = (len(thesis_title) // 40) + 1
 
             # =====================================
-            # SECTION 1: TRANG BÌA CHÍNH
+            # SECTION 1: TRANG BÌA CHÍNH (KHÔNG SỐ TRANG)
             # =====================================
             sec_0 = doc.sections[0]
             sec_0.top_margin, sec_0.bottom_margin = Cm(3.5), Cm(3.0)
             sec_0.left_margin, sec_0.right_margin = Cm(3.5), Cm(2.0)
             add_page_border(sec_0._sectPr)
 
-            # Gọi hàm với khoảng cách 4 dòng
             render_cover_header_and_title(doc, author_name, thesis_title, author_space=4)
-            
             add_empty_lines(doc, 3)
             p = doc.add_paragraph()
             p.alignment = WD_ALIGN_PARAGRAPH.CENTER
             r = p.add_run("ĐỀ CƯƠNG LUẬN VĂN THẠC SĨ")
             r.bold, r.font.name, r.font.size = True, 'Times New Roman', Pt(16)
             
-            # Neo đáy trang bìa chính
             empty_lines_to_bottom = 8 - title_lines
             if empty_lines_to_bottom < 1: empty_lines_to_bottom = 1
             add_empty_lines(doc, empty_lines_to_bottom)
@@ -243,16 +280,14 @@ if st.button("✨ TẠO FILE WORD HOÀN CHỈNH", type="primary", use_container_
             r.bold, r.font.name, r.font.size = True, 'Times New Roman', Pt(16)
 
             # =====================================
-            # SECTION 2: TRANG BÌA PHỤ (CÓ KHUNG VIỀN)
+            # SECTION 2: TRANG BÌA PHỤ (KHÔNG SỐ TRANG)
             # =====================================
             new_section_cover_2 = doc.add_section(WD_SECTION.NEW_PAGE)
             new_section_cover_2.top_margin, new_section_cover_2.bottom_margin = Cm(3.5), Cm(3.0)
             new_section_cover_2.left_margin, new_section_cover_2.right_margin = Cm(3.5), Cm(2.0)
             add_page_border(new_section_cover_2._sectPr)
 
-            # Gọi hàm với khoảng cách 2 dòng (Rút ngắn khoảng trống theo yêu cầu)
             render_cover_header_and_title(doc, author_name, thesis_title, author_space=2)
-
             add_empty_lines(doc, 1)
             p = doc.add_paragraph()
             p.alignment = WD_ALIGN_PARAGRAPH.CENTER
@@ -276,7 +311,6 @@ if st.button("✨ TẠO FILE WORD HOÀN CHỈNH", type="primary", use_container_
             r = p.add_run("NGƯỜI DỰ KIẾN HƯỚNG DẪN KHOA HỌC:")
             r.bold, r.font.name, r.font.size = True, 'Times New Roman', Pt(16)
 
-            # Kiểm tra logic: Nếu chỉ có 1 người hướng dẫn thì không đánh số "1."
             if not supervisor_2.strip():
                 p = doc.add_paragraph()
                 p.alignment = WD_ALIGN_PARAGRAPH.CENTER
@@ -293,7 +327,6 @@ if st.button("✨ TẠO FILE WORD HOÀN CHỈNH", type="primary", use_container_
                 r = p.add_run(f"2. {supervisor_2.upper()}")
                 r.bold, r.font.name, r.font.size = True, 'Times New Roman', Pt(16)
 
-            # Tính toán dòng neo đáy (cộng bù 2 dòng trống đã rút ngắn ở trên, trừ số dòng của hướng dẫn 2 nếu có)
             empty_lines_inner = 6 - title_lines - (1 if supervisor_2.strip() else 0)
             if empty_lines_inner < 1: empty_lines_inner = 1
             add_empty_lines(doc, empty_lines_inner)
@@ -304,31 +337,48 @@ if st.button("✨ TẠO FILE WORD HOÀN CHỈNH", type="primary", use_container_
             r.bold, r.font.name, r.font.size = True, 'Times New Roman', Pt(16)
 
             # =====================================
-            # SECTION 3: NGẮT TRANG - BẮT ĐẦU PHẦN NỘI DUNG
+            # SECTION 3: BẮT ĐẦU NỘI DUNG (ĐÁNH SỐ TRANG TỪ SỐ 1)
             # =====================================
             new_section_content = doc.add_section(WD_SECTION.NEW_PAGE)
-            clear_page_border(new_section_content._sectPr) 
+            clear_page_border(new_section_content._sectPr)
+            
+            # --- TÁCH HEADER VÀ GẮN SỐ TRANG ---
+            new_section_content.header.is_linked_to_previous = False
+            header_para = new_section_content.header.paragraphs[0]
+            header_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            add_page_number(header_para) # Chèn "PAGE" vào header
+            
+            # Ép Word đếm số trang từ 1
+            sectPr = new_section_content._sectPr
+            pgNumType = OxmlElement('w:pgNumType')
+            pgNumType.set(qn('w:start'), '1')
+            sectPr.append(pgNumType)
 
             if dat_van_de_content.strip():
                 add_main_heading(doc, "ĐẶT VẤN ĐỀ")
                 add_normal_text(doc, dat_van_de_content)
                 doc.add_page_break()
 
-            for i, chap in enumerate(processed_chapters):
+            for i, chap in enumerate(all_chapters):
                 add_main_heading(doc, f"CHƯƠNG {i+1}: {chap['title']}")
                 add_normal_text(doc, chap['content'])
                 write_sections_to_word(doc, chap['children'], [str(i+1)])
-                doc.add_page_break()
-
-            if ket_luan_content.strip():
-                add_main_heading(doc, "KẾT LUẬN VÀ KIẾN NGHỊ")
-                add_normal_text(doc, ket_luan_content)
                 doc.add_page_break()
 
             if danh_muc_content.strip():
                 add_main_heading(doc, "DANH MỤC CÁC CÔNG TRÌNH CÔNG BỐ CÓ LIÊN QUAN")
                 add_normal_text(doc, danh_muc_content)
                 doc.add_page_break()
+
+            # =====================================
+            # SECTION 4: TÀI LIỆU THAM KHẢO & PHỤ LỤC (KHÔNG SỐ TRANG)
+            # =====================================
+            new_section_end = doc.add_section(WD_SECTION.CONTINUOUS)
+            
+            # Ngắt liên kết Header để xóa số trang
+            new_section_end.header.is_linked_to_previous = False
+            for hp in new_section_end.header.paragraphs:
+                hp.text = "" 
 
             if tai_lieu_content.strip():
                 add_main_heading(doc, "TÀI LIỆU THAM KHẢO")
