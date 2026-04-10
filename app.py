@@ -309,7 +309,6 @@ def write_sections_to_word(doc, children_list, prefix_list):
                 write_sections_to_word(doc, child["children"], current_prefix)
 
 def render_cover_header_and_title(doc, author_name, thesis_title, author_space=4, insert_logo=False):
-    """Hàm dàn trang bìa. Biến insert_logo giúp bật/tắt logo tùy trang."""
     table = doc.add_table(rows=1, cols=2)
     p_left = table.cell(0, 0).paragraphs[0]
     p_left.alignment = WD_ALIGN_PARAGRAPH.LEFT
@@ -325,14 +324,13 @@ def render_cover_header_and_title(doc, author_name, thesis_title, author_space=4
     p.alignment = WD_ALIGN_PARAGRAPH.CENTER
     r = p.add_run("ĐẠI HỌC Y DƯỢC THÀNH PHỐ HỒ CHÍ MINH")
     r.bold, r.font.name, r.font.size = True, 'Times New Roman', Pt(16)
-    
-    add_empty_lines(doc, 1)
 
     # === THUẬT TOÁN CHÈN LOGO TỰ ĐỘNG (.png) ===
     logo_path = "logo_UMP.png"
     logo_added = False
     
     if insert_logo and os.path.exists(logo_path):
+        add_empty_lines(doc, 1) # Thêm 1 dòng trống trên logo nếu có
         try:
             p_logo = doc.add_paragraph()
             p_logo.alignment = WD_ALIGN_PARAGRAPH.CENTER
@@ -342,7 +340,8 @@ def render_cover_header_and_title(doc, author_name, thesis_title, author_space=4
         except Exception:
             pass
 
-    # Điều chỉnh khoảng trống phụ thuộc việc có chèn logo hay không
+    # Nếu có logo, tổng khoảng trống được trừ hao đi độ cao của logo.
+    # Nếu không có logo, sử dụng chính xác biến author_space được truyền vào.
     if logo_added:
         adjusted_space = max(1, author_space - 2)
         add_empty_lines(doc, adjusted_space)
@@ -401,7 +400,6 @@ if st.button("✨ TẠO FILE WORD HOÀN CHỈNH", type="primary", use_container_
             sec_0.left_margin, sec_0.right_margin = Cm(3.5), Cm(2.0)
             add_page_border(sec_0._sectPr)
 
-            # Bật insert_logo = True cho trang bìa ngoài cùng
             logo_inserted_1 = render_cover_header_and_title(doc, author_name, thesis_title, author_space=4, insert_logo=True)
             
             add_empty_lines(doc, 3)
@@ -410,7 +408,8 @@ if st.button("✨ TẠO FILE WORD HOÀN CHỈNH", type="primary", use_container_
             r = p.add_run("ĐỀ CƯƠNG LUẬN VĂN THẠC SĨ")
             r.bold, r.font.name, r.font.size = True, 'Times New Roman', Pt(16)
             
-            base_empty_1 = 5 if logo_inserted_1 else 8
+            # Cập nhật số dòng neo đáy (Bù lại 1 dòng trống mặc định đã xóa)
+            base_empty_1 = 5 if logo_inserted_1 else 9
             empty_lines_to_bottom = base_empty_1 - title_lines
             if empty_lines_to_bottom < 1: empty_lines_to_bottom = 1
             add_empty_lines(doc, empty_lines_to_bottom)
@@ -428,7 +427,7 @@ if st.button("✨ TẠO FILE WORD HOÀN CHỈNH", type="primary", use_container_
             new_section_cover_2.left_margin, new_section_cover_2.right_margin = Cm(3.5), Cm(2.0)
             add_page_border(new_section_cover_2._sectPr)
 
-            # Tắt insert_logo = False cho trang lót bên trong
+            # Phân tách chính xác bằng 2 dòng trống
             logo_inserted_2 = render_cover_header_and_title(doc, author_name, thesis_title, author_space=2, insert_logo=False)
             
             add_empty_lines(doc, 1)
@@ -470,7 +469,8 @@ if st.button("✨ TẠO FILE WORD HOÀN CHỈNH", type="primary", use_container_
                 r = p.add_run(f"2. {supervisor_2.upper()}")
                 r.bold, r.font.name, r.font.size = True, 'Times New Roman', Pt(16)
 
-            base_empty_2 = 4 if logo_inserted_2 else 6
+            # Cập nhật số dòng neo đáy cho Bìa 2 (Tăng thêm 1)
+            base_empty_2 = 4 if logo_inserted_2 else 7 
             empty_lines_inner = base_empty_2 - title_lines - (1 if supervisor_2.strip() else 0)
             if empty_lines_inner < 1: empty_lines_inner = 1
             add_empty_lines(doc, empty_lines_inner)
@@ -565,6 +565,6 @@ if st.button("✨ TẠO FILE WORD HOÀN CHỈNH", type="primary", use_container_
             doc.save(bio)
             
             st.success("🎉 Đã xuất file thành công!")
-            st.info("💡 **LƯU Ý:** Hệ thống đã thiết lập chỉ tự động chèn file **`logo_UMP.png`** vào trang bìa chính.")
+            st.info("💡 **LƯU Ý:** Hệ thống đã tự động quét tìm và chèn file **`logo_UMP.png`** vào trang bìa nếu bạn đã đưa file lên GitHub.")
             st.download_button("⬇️ TẢI FILE ĐỀ CƯƠNG LUẬN VĂN (.docx)", bio.getvalue(), "De_Cuong_Hoan_Chinh_Co_Logo.docx", 
                                "application/vnd.openxmlformats-officedocument.wordprocessingml.document", use_container_width=True)
