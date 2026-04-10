@@ -228,15 +228,15 @@ if st.button("✨ TẠO FILE WORD HOÀN CHỈNH", type="primary", use_container_
             r.font.name, r.font.size = 'Times New Roman', Pt(16)
             
             # ----------------------------------------------------
-            # THUẬT TOÁN TÍNH TOÁN NEO ĐÁY TRANG
+            # THUẬT TOÁN TÍNH TOÁN NEO ĐÁY TRANG ĐÃ SỬA LỖI
             # ----------------------------------------------------
-            # Một dòng chữ size 20 in đậm chứa khoảng 40 ký tự.
+            # Tính số dòng của Tên đề tài (Khoảng 40 ký tự/dòng)
             title_lines = (len(thesis_title) // 40) + 1
             
-            # Tổng số dòng chứa được ở khoảng trống còn lại của trang A4 chuẩn ĐHYD là khoảng 22 dòng.
-            # Trừ đi số dòng giãn nở của Tên đề tài (size 20 bự hơn size 16 nên nhân hệ số 1.5)
-            empty_lines_to_bottom = 22 - int(title_lines * 1.5)
+            # Đã giảm đi 13 dòng bị dư theo góp ý. Công thức chuẩn hiện tại:
+            empty_lines_to_bottom = 9 - title_lines
             
+            # Luôn giữ tối thiểu 1 dòng để tránh lỗi dính chữ
             if empty_lines_to_bottom < 1: 
                 empty_lines_to_bottom = 1
                 
