@@ -228,15 +228,13 @@ if st.button("✨ TẠO FILE WORD HOÀN CHỈNH", type="primary", use_container_
             r.font.name, r.font.size = 'Times New Roman', Pt(16)
             
             # ----------------------------------------------------
-            # THUẬT TOÁN TÍNH TOÁN NEO ĐÁY TRANG ĐÃ SỬA LỖI
+            # THUẬT TOÁN TÍNH TOÁN NEO ĐÁY TRANG ĐÃ SỬA LỖI LẦN 2
             # ----------------------------------------------------
-            # Tính số dòng của Tên đề tài (Khoảng 40 ký tự/dòng)
             title_lines = (len(thesis_title) // 40) + 1
             
-            # Đã giảm đi 13 dòng bị dư theo góp ý. Công thức chuẩn hiện tại:
-            empty_lines_to_bottom = 9 - title_lines
+            # Giảm chính xác 1 dòng trống cuối cùng
+            empty_lines_to_bottom = 8 - title_lines
             
-            # Luôn giữ tối thiểu 1 dòng để tránh lỗi dính chữ
             if empty_lines_to_bottom < 1: 
                 empty_lines_to_bottom = 1
                 
