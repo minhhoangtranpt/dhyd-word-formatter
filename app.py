@@ -13,11 +13,11 @@ import io
 st.set_page_config(page_title="Tạo Đề Cương Luận Văn", page_icon="🎓", layout="centered")
 
 st.title("🎓 Trình Tạo Đề Cương Luận Văn Chuẩn")
-st.write("Hệ thống tự động dàn trang, tạo MỤC LỤC TỰ ĐỘNG, ép chuẩn font và đánh số trang.")
+st.write("Hệ thống tự động dàn trang, tạo MỤC LỤC, bảng Danh mục và hệ thống số trang kép (La Mã + Ả Rập).")
 st.divider()
 
 # ==========================================
-# CÁC HÀM CAN THIỆP XML & STYLE MỤC LỤC
+# CÁC HÀM CAN THIỆP XML 
 # ==========================================
 def add_page_border(sect_pr):
     borders = OxmlElement('w:pgBorders')
@@ -54,7 +54,7 @@ def add_page_number(paragraph):
     p.append(run)
 
 def setup_toc_styles(doc):
-    """Ép chuẩn định dạng cho Mục lục tự động theo quy định ĐHYD"""
+    """Ép chuẩn định dạng cho Mục lục: Chữ thường (không in đậm) và thụt lề treo"""
     for i in range(1, 4):
         style_name = f'TOC {i}'
         try:
@@ -62,24 +62,16 @@ def setup_toc_styles(doc):
         except KeyError:
             style = doc.styles.add_style(style_name, WD_STYLE_TYPE.PARAGRAPH)
         
-        # 1. Cỡ chữ 13, Times New Roman, CHỮ THƯỜNG (Không in đậm)
         style.font.name = 'Times New Roman'
         style.font.size = Pt(13)
         style.font.bold = False 
         
-        # 2. Căn lề thẳng cột và thụt đầu dòng treo (Hanging Indent = 1 tab = 1.27cm)
         if i == 1:
-            # Chương: Thụt dòng 2 vào 1 tab
-            style.paragraph_format.left_indent = Cm(1.27)
-            style.paragraph_format.first_line_indent = Cm(-1.27)
+            style.paragraph_format.left_indent = Cm(0)
         elif i == 2:
-            # Tiểu mục cấp 1: Thẳng cột với chương
-            style.paragraph_format.left_indent = Cm(1.27)
-            style.paragraph_format.first_line_indent = Cm(-1.27)
+            style.paragraph_format.left_indent = Cm(1.27) # Thẳng cột với chữ cái của Chương
         elif i == 3:
-            # Tiểu mục cấp 2: Thụt vô thêm 1 chút
-            style.paragraph_format.left_indent = Cm(2.27)
-            style.paragraph_format.first_line_indent = Cm(-1.27)
+            style.paragraph_format.left_indent = Cm(2.54)
 
 def add_toc_to_doc(doc):
     p = doc.add_paragraph()
@@ -118,6 +110,51 @@ def add_toc_to_doc(doc):
     r_note = p_note.add_run("\n[HƯỚNG DẪN HIỂN THỊ MỤC LỤC VÀ CẬP NHẬT SỐ TRANG]\n1. Nhấn nút 'Enable Editing' (Bật chỉnh sửa) màu vàng ở phía trên cùng màn hình Word.\n2. Bấm tổ hợp phím Ctrl + P (để Word nhận diện số trang), sau đó bấm Esc để quay lại.\n3. Nhấp CHUỘT PHẢI vào dòng chữ đỏ này -> Chọn 'Update Field' -> Chọn 'Update entire table' -> OK.\n")
     r_note.font.name, r_note.font.size, r_note.font.italic = 'Times New Roman', Pt(11), True
     r_note.font.color.rgb = RGBColor(255, 0, 0)
+
+def set_pgnum_type(sectPr, fmt='decimal', start='1'):
+    """Hàm hỗ trợ chèn hệ thống số trang (La Mã hoặc Ả Rập)"""
+    pgNumType = OxmlElement('w:pgNumType')
+    pgNumType.set(qn('w:fmt'), fmt)
+    pgNumType.set(qn('w:start'), start)
+    
+    cols = sectPr.xpath('./w:cols')
+    docGrid = sectPr.xpath('./w:docGrid')
+    if cols:
+        cols[0].addprevious(pgNumType)
+    elif docGrid:
+        docGrid[0].addprevious(pgNumType)
+    else:
+        sectPr.append(pgNumType)
+
+# ==========================================
+# HÀM TẠO BẢNG DANH MỤC
+# ==========================================
+def create_two_col_table(doc, col1_name, col2_name):
+    table = doc.add_table(rows=1, cols=2)
+    table.style = 'Table Grid'
+    
+    # Header row
+    hdr_cells = table.rows[0].cells
+    hdr_cells[0].text = col1_name
+    hdr_cells[1].text = col2_name
+    
+    # Định dạng Header
+    for cell in hdr_cells:
+        for p in cell.paragraphs:
+            p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            for r in p.runs:
+                r.bold = True
+                r.font.name = 'Times New Roman'
+                r.font.size = Pt(13)
+                
+    # Chỉnh độ rộng cột (Cột 1 hẹp, Cột 2 rộng)
+    for row in table.rows:
+        row.cells[0].width = Cm(4.5)
+        row.cells[1].width = Cm(11.0)
+        
+    # Thêm vài dòng trống sẵn
+    for _ in range(3):
+        table.add_row()
 
 # ==========================================
 # HÀM ĐỆ QUY TẠO GIAO DIỆN NHẬP LIỆU
@@ -322,7 +359,7 @@ if st.button("✨ TẠO FILE WORD HOÀN CHỈNH", type="primary", use_container_
 
             doc = docx.Document()
             
-            # Khởi tạo định dạng cho TOC
+            # Cấu hình lại Style TOC cho chuẩn quy định
             setup_toc_styles(doc)
             
             style_normal = doc.styles['Normal']
@@ -419,39 +456,61 @@ if st.button("✨ TẠO FILE WORD HOÀN CHỈNH", type="primary", use_container_
             r.bold, r.font.name, r.font.size = True, 'Times New Roman', Pt(16)
 
             # =====================================
-            # SECTION 2.5: MỤC LỤC TỰ ĐỘNG
+            # SECTION 3: CÁC TRANG DANH MỤC ĐỆM (SỐ LA MÃ i, ii, iii...)
             # =====================================
-            new_section_toc = doc.add_section(WD_SECTION.NEW_PAGE)
-            clear_page_border(new_section_toc._sectPr)
+            new_section_prelim = doc.add_section(WD_SECTION.NEW_PAGE)
+            clear_page_border(new_section_prelim._sectPr)
             
-            new_section_toc.header.is_linked_to_previous = False
-            for hp in new_section_toc.header.paragraphs: hp.text = "" 
+            # Bật đánh số trang và gán định dạng La Mã viết thường
+            new_section_prelim.header.is_linked_to_previous = False
+            header_para = new_section_prelim.header.paragraphs[0]
+            header_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            add_page_number(header_para) 
+            set_pgnum_type(new_section_prelim._sectPr, fmt='lowerRoman', start='1')
             
+            # --- Trang 1: Mục lục ---
             add_toc_to_doc(doc)
+            doc.add_page_break()
+
+            # --- Trang 2: Danh mục từ viết tắt ---
+            add_main_heading(doc, "DANH MỤC CÁC TỪ VIẾT TẮT")
+            create_two_col_table(doc, "Từ viết tắt", "Ý nghĩa")
+            doc.add_page_break()
+
+            # --- Trang 3: Danh mục thuật ngữ Anh - Việt ---
+            add_main_heading(doc, "DANH MỤC ĐỐI CHIẾU CÁC THUẬT NGỮ ANH - VIỆT")
+            create_two_col_table(doc, "Tiếng Anh", "Tiếng Việt")
+            doc.add_page_break()
+
+            # --- Trang 4: Danh mục bảng ---
+            add_main_heading(doc, "DANH MỤC CÁC BẢNG")
+            p_b = doc.add_paragraph("(Chèn danh mục bảng tự động tại đây bằng Word)")
+            p_b.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            doc.add_page_break()
+
+            # --- Trang 5: Danh mục hình ---
+            add_main_heading(doc, "DANH MỤC CÁC HÌNH")
+            p_h = doc.add_paragraph("(Chèn danh mục hình tự động tại đây bằng Word)")
+            p_h.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            doc.add_page_break()
+
+            # --- Trang 6: Danh mục sơ đồ ---
+            add_main_heading(doc, "DANH MỤC CÁC SƠ ĐỒ")
+            p_s = doc.add_paragraph("(Chèn danh mục sơ đồ tự động tại đây bằng Word)")
+            p_s.alignment = WD_ALIGN_PARAGRAPH.CENTER
 
             # =====================================
-            # SECTION 3: BẮT ĐẦU NỘI DUNG
+            # SECTION 4: BẮT ĐẦU NỘI DUNG (SỐ Ả RẬP 1, 2, 3...)
             # =====================================
             new_section_content = doc.add_section(WD_SECTION.NEW_PAGE)
             clear_page_border(new_section_content._sectPr)
             
+            # Chỉnh lại bộ đếm về dạng số Ả Rập, bắt đầu lại từ số 1
             new_section_content.header.is_linked_to_previous = False
-            header_para = new_section_content.header.paragraphs[0]
-            header_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
-            add_page_number(header_para) 
-            
-            sectPr = new_section_content._sectPr
-            pgNumType = OxmlElement('w:pgNumType')
-            pgNumType.set(qn('w:start'), '1')
-            
-            cols = sectPr.xpath('./w:cols')
-            docGrid = sectPr.xpath('./w:docGrid')
-            if cols:
-                cols[0].addprevious(pgNumType)
-            elif docGrid:
-                docGrid[0].addprevious(pgNumType)
-            else:
-                sectPr.append(pgNumType)
+            header_para_main = new_section_content.header.paragraphs[0]
+            header_para_main.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            add_page_number(header_para_main) 
+            set_pgnum_type(new_section_content._sectPr, fmt='decimal', start='1')
 
             if dat_van_de_content.strip():
                 add_main_heading(doc, "ĐẶT VẤN ĐỀ")
@@ -459,7 +518,8 @@ if st.button("✨ TẠO FILE WORD HOÀN CHỈNH", type="primary", use_container_
                 doc.add_page_break()
 
             for i, chap in enumerate(all_chapters):
-                add_main_heading(doc, f"CHƯƠNG {i+1}: {chap['title']}")
+                # Chuẩn hóa tên Chương (Ví dụ: CHƯƠNG 1. TỔNG QUAN TÀI LIỆU) thay vì dùng dấu hai chấm
+                add_main_heading(doc, f"CHƯƠNG {i+1}. {chap['title']}")
                 add_normal_text(doc, chap['content'])
                 write_sections_to_word(doc, chap['children'], [str(i+1)])
                 doc.add_page_break()
@@ -470,7 +530,7 @@ if st.button("✨ TẠO FILE WORD HOÀN CHỈNH", type="primary", use_container_
                 doc.add_page_break()
 
             # =====================================
-            # SECTION 4: TÀI LIỆU THAM KHẢO & PHỤ LỤC 
+            # SECTION 5: TÀI LIỆU THAM KHẢO & PHỤ LỤC 
             # =====================================
             new_section_end = doc.add_section(WD_SECTION.CONTINUOUS)
             new_section_end.header.is_linked_to_previous = False
