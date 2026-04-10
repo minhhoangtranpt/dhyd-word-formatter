@@ -255,21 +255,21 @@ st.divider()
 # CÁC HÀM HỖ TRỢ XUẤT FILE WORD 
 # ==========================================
 def add_empty_lines(doc, num_lines, size=16):
-    """Tạo dòng trống đã xóa bỏ hoàn toàn khoảng đệm thừa"""
+    """Tạo dòng trống giãn dòng chuẩn 1.5"""
     if num_lines > 0:
         for _ in range(int(num_lines)):
             p = doc.add_paragraph()
             p.paragraph_format.space_after = Pt(0)
-            p.paragraph_format.line_spacing = 1.0
+            p.paragraph_format.line_spacing = 1.5
             r = p.add_run()
             r.font.size = Pt(size)
 
 def add_cover_para(doc, text, size=16, bold=True):
-    """Hàm tạo dòng chữ ở trang bìa bị ÉP CỨNG không có khoảng cách dư (Space After = 0)"""
+    """Hàm tạo dòng chữ ở trang bìa giãn dòng chuẩn 1.5 (Không dư khoảng đệm)"""
     p = doc.add_paragraph()
     p.alignment = WD_ALIGN_PARAGRAPH.CENTER
     p.paragraph_format.space_after = Pt(0)
-    p.paragraph_format.line_spacing = 1.0
+    p.paragraph_format.line_spacing = 1.5
     r = p.add_run(text)
     r.bold = bold
     r.font.name = 'Times New Roman'
@@ -323,44 +323,46 @@ def write_sections_to_word(doc, children_list, prefix_list):
                 write_sections_to_word(doc, child["children"], current_prefix)
 
 def render_cover_header_and_title(doc, author_name, thesis_title, spaces, insert_logo=False):
-    """Khung in 2 hàng đầu và Tiêu đề. Các khoảng trống lấy từ mảng spaces"""
+    """Khung in 2 hàng đầu và Tiêu đề. 2 hàng đầu dính liền không cách dòng"""
     table = doc.add_table(rows=1, cols=2)
     p_left = table.cell(0, 0).paragraphs[0]
     p_left.paragraph_format.space_after = Pt(0)
-    p_left.paragraph_format.line_spacing = 1.0
+    p_left.paragraph_format.line_spacing = 1.5
     p_left.alignment = WD_ALIGN_PARAGRAPH.LEFT
     r_left = p_left.add_run("BỘ GIÁO DỤC VÀ ĐÀO TẠO")
     r_left.font.name, r_left.font.size = 'Times New Roman', Pt(16)
     
     p_right = table.cell(0, 1).paragraphs[0]
     p_right.paragraph_format.space_after = Pt(0)
-    p_right.paragraph_format.line_spacing = 1.0
+    p_right.paragraph_format.line_spacing = 1.5
     p_right.alignment = WD_ALIGN_PARAGRAPH.RIGHT
     r_right = p_right.add_run("BỘ Y TẾ")
     r_right.font.name, r_right.font.size = 'Times New Roman', Pt(16)
     
-    # Ép buộc 1 dòng trống ngay giữa 2 hàng chữ đầu tiên
-    add_empty_lines(doc, 1, 16)
-    
+    # Nối liền ĐẠI HỌC Y DƯỢC sát bên dưới (không chèn dòng trống)
     add_cover_para(doc, "ĐẠI HỌC Y DƯỢC THÀNH PHỐ HỒ CHÍ MINH", 16, True)
 
     logo_path = "logo_UMP.png"
     logo_added = False
     
     if insert_logo and os.path.exists(logo_path):
-        add_empty_lines(doc, 1, 16)
         try:
             p_logo = doc.add_paragraph()
             p_logo.alignment = WD_ALIGN_PARAGRAPH.CENTER
             p_logo.paragraph_format.space_after = Pt(0)
-            p_logo.paragraph_format.line_spacing = 1.0
+            p_logo.paragraph_format.line_spacing = 1.5
             r_logo = p_logo.add_run()
             r_logo.add_picture(logo_path, width=Cm(3.5)) 
             logo_added = True
         except Exception:
             pass
 
-    add_empty_lines(doc, spaces[0], 16)
+    if logo_added:
+        adjusted_space = max(1, spaces[0] - 2) # Trừ hao logo
+        add_empty_lines(doc, adjusted_space, 16)
+    else:
+        add_empty_lines(doc, spaces[0], 16)
+    
     add_cover_para(doc, author_name.upper(), 16, True)
     
     add_empty_lines(doc, spaces[1], 16)
@@ -405,9 +407,8 @@ if st.button("✨ TẠO FILE WORD HOÀN CHỈNH", type="primary", use_container_
             sec_0.left_margin, sec_0.right_margin = Cm(3.5), Cm(2.0)
             add_page_border(sec_0._sectPr)
 
-            # Vì bỏ khoảng trắng dư thừa, mặt giấy sẽ có nhiều không gian hơn.
-            # Mảng defaults: [Trên Tác giả, Trên Tiêu đề, Trên Đề cương, Trên Đáy]
-            defaults_1 = [5, 2, 4, 15] 
+            # Mảng defaults_1: [Trên Tác giả, Trên Tiêu đề, Trên Đề cương, Trên Đáy]
+            defaults_1 = [2, 1, 2, 7] 
             excess_1 = max(0, title_lines - 1)
             spaces_1 = distribute_spaces(defaults_1, excess_1)
 
@@ -418,7 +419,7 @@ if st.button("✨ TẠO FILE WORD HOÀN CHỈNH", type="primary", use_container_
             
             bottom_space_1 = spaces_1[3]
             if logo_inserted_1:
-                bottom_space_1 = max(1, bottom_space_1 - 6) # Trừ hao không gian 6 dòng cho Logo
+                bottom_space_1 = max(1, bottom_space_1 - 3) # Trừ hao không gian Logo
                 
             add_empty_lines(doc, bottom_space_1, 16)
             add_cover_para(doc, "THÀNH PHỐ HỒ CHÍ MINH - NĂM 2026", 16, True)
@@ -433,41 +434,32 @@ if st.button("✨ TẠO FILE WORD HOÀN CHỈNH", type="primary", use_container_
 
             has_sup2 = bool(supervisor_2.strip())
             
-            # Mảng defaults 2: Từng khe trống dọc theo trang bìa phụ (Tối thiểu luôn tự động ép >= 1)
-            defaults_2 = [5, 2, 2, 2, 2, 2, 2] 
-            if has_sup2:
-                defaults_2.append(2) # Khe giữa 2 người HD
-                defaults_2.append(8) # Khe neo đáy
-            else:
-                defaults_2.append(10) # Khe neo đáy
+            # Mảng defaults 2: [Trên Tác giả, Trên Tiêu đề, Trên Ngành, Trên Đề cương, Trên Người HD, Trên Đáy TPHCM]
+            defaults_2 = [2, 1, 2, 2, 2, 7] 
             
-            excess_2 = max(0, title_lines - 1)
+            excess_2 = max(0, title_lines - 1) + (1 if has_sup2 else 0)
             spaces_2 = distribute_spaces(defaults_2, excess_2)
 
             render_cover_header_and_title(doc, author_name, thesis_title, spaces_2, insert_logo=False)
             
             add_empty_lines(doc, spaces_2[2], 16)
+            # Gộp Ngành và Mã số sát nhau
             add_cover_para(doc, "NGÀNH: KỸ THUẬT PHỤC HỒI CHỨC NĂNG", 16, True)
-
-            add_empty_lines(doc, spaces_2[3], 16)
             add_cover_para(doc, "MÃ SỐ: 8720603", 16, True)
 
-            add_empty_lines(doc, spaces_2[4], 16)
+            add_empty_lines(doc, spaces_2[3], 16)
             add_cover_para(doc, "ĐỀ CƯƠNG LUẬN VĂN THẠC SĨ", 16, True)
 
-            add_empty_lines(doc, spaces_2[5], 16)
+            add_empty_lines(doc, spaces_2[4], 16)
+            # Gộp Người Hướng dẫn sát nhau
             add_cover_para(doc, "NGƯỜI DỰ KIẾN HƯỚNG DẪN KHOA HỌC:", 16, True)
-
-            add_empty_lines(doc, spaces_2[6], 16)
             if not has_sup2:
                 add_cover_para(doc, f"{supervisor_1.upper()}", 16, True)
-                add_empty_lines(doc, spaces_2[7], 16)
             else:
                 add_cover_para(doc, f"1. {supervisor_1.upper()}", 16, True)
-                add_empty_lines(doc, spaces_2[7], 16)
                 add_cover_para(doc, f"2. {supervisor_2.upper()}", 16, True)
-                add_empty_lines(doc, spaces_2[8], 16)
 
+            add_empty_lines(doc, spaces_2[5], 16)
             add_cover_para(doc, "THÀNH PHỐ HỒ CHÍ MINH - NĂM 2026", 16, True)
 
             # =====================================
