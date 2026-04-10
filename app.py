@@ -14,24 +14,22 @@ import io
 st.set_page_config(page_title="Tạo Đề Cương Luận Văn", page_icon="🎓", layout="centered")
 
 st.title("🎓 Trình Tạo Đề Cương Luận Văn Chuẩn")
-st.write("Hệ thống tự động dàn trang, thuật toán neo đáy chống tràn vô hình, chèn LOGO, tạo MỤC LỤC và số trang kép.")
+st.write("Hệ thống tự động dàn trang, thuật toán CĂN ĐỀU mốc trên/dưới, chèn LOGO, tạo MỤC LỤC và số trang kép.")
 st.divider()
 
 # ==========================================
 # CÁC HÀM CAN THIỆP XML & THUẬT TOÁN DÀN TRANG
 # ==========================================
-def distribute_spaces(defaults, excess):
-    """Thuật toán rút khoảng trống từ dưới lên trên, cam kết mọi khoảng trống tối thiểu >= 1"""
-    spaces = list(defaults)
-    while excess > 0:
-        reduced = False
-        for i in range(len(spaces) - 1, -1, -1):
-            if spaces[i] > 1 and excess > 0:
-                spaces[i] -= 1
-                excess -= 1
-                reduced = True
-        if not reduced:
-            break
+def calculate_even_spaces(total_allowed_lines, used_lines, num_gaps):
+    """Thuật toán chia đều khoảng trống: Lấy tổng không gian trừ đi không gian chữ, sau đó chia đều cho các khe hở"""
+    remaining = max(num_gaps, total_allowed_lines - used_lines) # Đảm bảo mỗi khe luôn >= 1
+    base = remaining // num_gaps
+    remainder = remaining % num_gaps
+    
+    spaces = [base] * num_gaps
+    # Nếu chia không hết, cộng dồn phần dư xuống các khe phía đáy trang
+    for i in range(remainder):
+        spaces[-(i+1)] += 1
     return spaces
 
 def add_page_border(sect_pr):
@@ -322,53 +320,6 @@ def write_sections_to_word(doc, children_list, prefix_list):
             if child.get("children"):
                 write_sections_to_word(doc, child["children"], current_prefix)
 
-def render_cover_header_and_title(doc, author_name, thesis_title, spaces, insert_logo=False):
-    """Khung in 2 hàng đầu và Tiêu đề. 2 hàng đầu dính liền không cách dòng"""
-    table = doc.add_table(rows=1, cols=2)
-    p_left = table.cell(0, 0).paragraphs[0]
-    p_left.paragraph_format.space_after = Pt(0)
-    p_left.paragraph_format.line_spacing = 1.5
-    p_left.alignment = WD_ALIGN_PARAGRAPH.LEFT
-    r_left = p_left.add_run("BỘ GIÁO DỤC VÀ ĐÀO TẠO")
-    r_left.font.name, r_left.font.size = 'Times New Roman', Pt(16)
-    
-    p_right = table.cell(0, 1).paragraphs[0]
-    p_right.paragraph_format.space_after = Pt(0)
-    p_right.paragraph_format.line_spacing = 1.5
-    p_right.alignment = WD_ALIGN_PARAGRAPH.RIGHT
-    r_right = p_right.add_run("BỘ Y TẾ")
-    r_right.font.name, r_right.font.size = 'Times New Roman', Pt(16)
-    
-    # Nối liền ĐẠI HỌC Y DƯỢC sát bên dưới (không chèn dòng trống)
-    add_cover_para(doc, "ĐẠI HỌC Y DƯỢC THÀNH PHỐ HỒ CHÍ MINH", 16, True)
-
-    logo_path = "logo_UMP.png"
-    logo_added = False
-    
-    if insert_logo and os.path.exists(logo_path):
-        try:
-            p_logo = doc.add_paragraph()
-            p_logo.alignment = WD_ALIGN_PARAGRAPH.CENTER
-            p_logo.paragraph_format.space_after = Pt(0)
-            p_logo.paragraph_format.line_spacing = 1.5
-            r_logo = p_logo.add_run()
-            r_logo.add_picture(logo_path, width=Cm(3.5)) 
-            logo_added = True
-        except Exception:
-            pass
-
-    if logo_added:
-        adjusted_space = max(1, spaces[0] - 2) # Trừ hao logo
-        add_empty_lines(doc, adjusted_space, 16)
-    else:
-        add_empty_lines(doc, spaces[0], 16)
-    
-    add_cover_para(doc, author_name.upper(), 16, True)
-    
-    add_empty_lines(doc, spaces[1], 16)
-    add_cover_para(doc, thesis_title.upper(), 20, True)
-
-    return logo_added
 
 # ==========================================
 # NÚT XỬ LÝ VÀ TẠO FILE WORD
@@ -377,7 +328,7 @@ if st.button("✨ TẠO FILE WORD HOÀN CHỈNH", type="primary", use_container_
     if not thesis_title or not supervisor_1:
         st.warning("⚠️ Vui lòng nhập Tên Đề tài và ít nhất 1 Người hướng dẫn!")
     else:
-        with st.spinner("Đang kích hoạt thuật toán chống tràn và dàn trang tự động..."):
+        with st.spinner("Đang kích hoạt thuật toán CĂN ĐỀU mốc không gian và dàn trang..."):
             c1_processed = {"title": "TỔNG QUAN TÀI LIỆU", "content": c1_intro, "children": [apply_academic_rules(c) for c in c1_children]}
             c2_processed = {"title": "PHƯƠNG PHÁP NGHIÊN CỨU", "content": c2_intro, "children": c2_children}
             c3_processed = {"title": "DỰ KIẾN KẾT QUẢ", "content": c3_intro, "children": [apply_academic_rules(c) for c in c3_children]}
@@ -398,6 +349,8 @@ if st.button("✨ TẠO FILE WORD HOÀN CHỈNH", type="primary", use_container_
                 pass
 
             title_lines = (len(thesis_title) // 40) + 1
+            has_logo = os.path.exists("logo_UMP.png")
+            has_sup2 = bool(supervisor_2.strip())
 
             # =====================================
             # SECTION 1: TRANG BÌA CHÍNH (CÓ LOGO)
@@ -407,22 +360,64 @@ if st.button("✨ TẠO FILE WORD HOÀN CHỈNH", type="primary", use_container_
             sec_0.left_margin, sec_0.right_margin = Cm(3.5), Cm(2.0)
             add_page_border(sec_0._sectPr)
 
-            # Mảng defaults_1: [Trên Tác giả, Trên Tiêu đề, Trên Đề cương, Trên Đáy]
-            defaults_1 = [2, 1, 2, 7] 
-            excess_1 = max(0, title_lines - 1)
-            spaces_1 = distribute_spaces(defaults_1, excess_1)
+            # --- TÍNH TOÁN CĂN ĐỀU BÌA 1 ---
+            # Số dòng giấy A4 tối đa quy ước an toàn: 23 dòng (đã trừ Margin)
+            # Khối chữ cố định đã dùng: BỘ (1) + ĐẠI HỌC (1) + Logo(4) + TÁC GIẢ(1) + TITLE(n) + ĐỀ CƯƠNG(1) + TPHCM(1)
+            used_lines_1 = 5 + title_lines + (4 if has_logo else 0)
+            # Tổng số khe hở giữa ĐẠI HỌC và TPHCM: 4 khe (Khe_Logo, Khe_TácGiả, Khe_TiêuĐề, Khe_ĐềCương)
+            spaces_1 = calculate_even_spaces(23, used_lines_1, 4)
 
-            logo_inserted_1 = render_cover_header_and_title(doc, author_name, thesis_title, spaces_1, insert_logo=True)
+            # Header Bìa 1 (2 dòng sát nhau không cách)
+            table = doc.add_table(rows=1, cols=2)
+            p_left = table.cell(0, 0).paragraphs[0]
+            p_left.paragraph_format.space_after = Pt(0)
+            p_left.paragraph_format.line_spacing = 1.5
+            p_left.alignment = WD_ALIGN_PARAGRAPH.LEFT
+            r_left = p_left.add_run("BỘ GIÁO DỤC VÀ ĐÀO TẠO")
+            r_left.font.name, r_left.font.size = 'Times New Roman', Pt(16)
             
+            p_right = table.cell(0, 1).paragraphs[0]
+            p_right.paragraph_format.space_after = Pt(0)
+            p_right.paragraph_format.line_spacing = 1.5
+            p_right.alignment = WD_ALIGN_PARAGRAPH.RIGHT
+            r_right = p_right.add_run("BỘ Y TẾ")
+            r_right.font.name, r_right.font.size = 'Times New Roman', Pt(16)
+            
+            # --- MỐC TRÊN ---
+            add_cover_para(doc, "ĐẠI HỌC Y DƯỢC THÀNH PHỐ HỒ CHÍ MINH", 16, True)
+
+            # Khe hở 1 (chia đều khoảng Logo)
+            if has_logo:
+                add_empty_lines(doc, 1, 16)
+                try:
+                    p_logo = doc.add_paragraph()
+                    p_logo.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                    p_logo.paragraph_format.space_after = Pt(0)
+                    p_logo.paragraph_format.line_spacing = 1.5
+                    r_logo = p_logo.add_run()
+                    r_logo.add_picture("logo_UMP.png", width=Cm(3.5)) 
+                except Exception:
+                    pass
+                add_empty_lines(doc, max(1, spaces_1[0] - 1), 16)
+            else:
+                add_empty_lines(doc, spaces_1[0], 16)
+
+            add_cover_para(doc, author_name.upper(), 16, True)
+            
+            # Khe hở 2
+            add_empty_lines(doc, spaces_1[1], 16)
+            add_cover_para(doc, thesis_title.upper(), 20, True)
+
+            # Khe hở 3
             add_empty_lines(doc, spaces_1[2], 16)
             add_cover_para(doc, "ĐỀ CƯƠNG LUẬN VĂN THẠC SĨ", 16, True)
+
+            # Khe hở 4
+            add_empty_lines(doc, spaces_1[3], 16)
             
-            bottom_space_1 = spaces_1[3]
-            if logo_inserted_1:
-                bottom_space_1 = max(1, bottom_space_1 - 3) # Trừ hao không gian Logo
-                
-            add_empty_lines(doc, bottom_space_1, 16)
+            # --- MỐC DƯỚI ---
             add_cover_para(doc, "THÀNH PHỐ HỒ CHÍ MINH - NĂM 2026", 16, True)
+
 
             # =====================================
             # SECTION 2: TRANG BÌA PHỤ (KHÔNG LOGO)
@@ -432,26 +427,52 @@ if st.button("✨ TẠO FILE WORD HOÀN CHỈNH", type="primary", use_container_
             new_section_cover_2.left_margin, new_section_cover_2.right_margin = Cm(3.5), Cm(2.0)
             add_page_border(new_section_cover_2._sectPr)
 
-            has_sup2 = bool(supervisor_2.strip())
-            
-            # Mảng defaults 2: [Trên Tác giả, Trên Tiêu đề, Trên Ngành, Trên Đề cương, Trên Người HD, Trên Đáy TPHCM]
-            defaults_2 = [2, 1, 2, 2, 2, 7] 
-            
-            excess_2 = max(0, title_lines - 1) + (1 if has_sup2 else 0)
-            spaces_2 = distribute_spaces(defaults_2, excess_2)
+            # --- TÍNH TOÁN CĂN ĐỀU BÌA 2 ---
+            # Khối chữ cố định đã dùng: BỘ(1) + ĐẠI HỌC(1) + TÁC GIẢ(1) + TITLE(n) + NGÀNH(1) + MÃ SỐ(1) + ĐỀ CƯƠNG(1) + NGƯỜI HD(1) + TÊN_HD(1/2) + TPHCM(1)
+            used_lines_2 = 9 + title_lines + (1 if has_sup2 else 0)
+            # Tổng số khe hở giữa ĐẠI HỌC và TPHCM: 5 khe (Khe_TácGiả, Khe_TiêuĐề, Khe_KhốiNgành, Khe_ĐềCương, Khe_KhốiHD)
+            spaces_2 = calculate_even_spaces(25, used_lines_2, 5)
 
-            render_cover_header_and_title(doc, author_name, thesis_title, spaces_2, insert_logo=False)
+            # Header Bìa 2 (2 dòng sát nhau không cách)
+            table = doc.add_table(rows=1, cols=2)
+            p_left = table.cell(0, 0).paragraphs[0]
+            p_left.paragraph_format.space_after = Pt(0)
+            p_left.paragraph_format.line_spacing = 1.5
+            p_left.alignment = WD_ALIGN_PARAGRAPH.LEFT
+            r_left = p_left.add_run("BỘ GIÁO DỤC VÀ ĐÀO TẠO")
+            r_left.font.name, r_left.font.size = 'Times New Roman', Pt(16)
             
+            p_right = table.cell(0, 1).paragraphs[0]
+            p_right.paragraph_format.space_after = Pt(0)
+            p_right.paragraph_format.line_spacing = 1.5
+            p_right.alignment = WD_ALIGN_PARAGRAPH.RIGHT
+            r_right = p_right.add_run("BỘ Y TẾ")
+            r_right.font.name, r_right.font.size = 'Times New Roman', Pt(16)
+            
+            # --- MỐC TRÊN ---
+            add_cover_para(doc, "ĐẠI HỌC Y DƯỢC THÀNH PHỐ HỒ CHÍ MINH", 16, True)
+
+            # Khe hở 1
+            add_empty_lines(doc, spaces_2[0], 16)
+            add_cover_para(doc, author_name.upper(), 16, True)
+            
+            # Khe hở 2
+            add_empty_lines(doc, spaces_2[1], 16)
+            add_cover_para(doc, thesis_title.upper(), 20, True)
+
+            # Khe hở 3
             add_empty_lines(doc, spaces_2[2], 16)
-            # Gộp Ngành và Mã số sát nhau
+            # --- KHỐI GỘP: NGÀNH & MÃ SỐ (Không cách dòng) ---
             add_cover_para(doc, "NGÀNH: KỸ THUẬT PHỤC HỒI CHỨC NĂNG", 16, True)
             add_cover_para(doc, "MÃ SỐ: 8720603", 16, True)
 
+            # Khe hở 4
             add_empty_lines(doc, spaces_2[3], 16)
             add_cover_para(doc, "ĐỀ CƯƠNG LUẬN VĂN THẠC SĨ", 16, True)
 
+            # Khe hở 5
             add_empty_lines(doc, spaces_2[4], 16)
-            # Gộp Người Hướng dẫn sát nhau
+            # --- KHỐI GỘP: NGƯỜI HD & TÊN (Không cách dòng) ---
             add_cover_para(doc, "NGƯỜI DỰ KIẾN HƯỚNG DẪN KHOA HỌC:", 16, True)
             if not has_sup2:
                 add_cover_para(doc, f"{supervisor_1.upper()}", 16, True)
@@ -459,8 +480,12 @@ if st.button("✨ TẠO FILE WORD HOÀN CHỈNH", type="primary", use_container_
                 add_cover_para(doc, f"1. {supervisor_1.upper()}", 16, True)
                 add_cover_para(doc, f"2. {supervisor_2.upper()}", 16, True)
 
-            add_empty_lines(doc, spaces_2[5], 16)
+            # Khe phân bổ phụ dư của hàm chia đều (để đẩy đáy xuống sát)
+            add_empty_lines(doc, 1 + spaces_2[4] // 2, 16)
+            
+            # --- MỐC DƯỚI ---
             add_cover_para(doc, "THÀNH PHỐ HỒ CHÍ MINH - NĂM 2026", 16, True)
+
 
             # =====================================
             # SECTION 3: CÁC TRANG DANH MỤC ĐỆM (SỐ LA MÃ)
@@ -548,6 +573,6 @@ if st.button("✨ TẠO FILE WORD HOÀN CHỈNH", type="primary", use_container_
             doc.save(bio)
             
             st.success("🎉 Đã xuất file thành công!")
-            st.info("💡 **LƯU Ý:** Thuật toán chống tràn đã làm sạch mọi rác định dạng. Các trang đệm (i, ii...) và trang nội dung (1, 2...) đều đã được phân biệt rạch ròi!")
-            st.download_button("⬇️ TẢI FILE ĐỀ CƯƠNG LUẬN VĂN (.docx)", bio.getvalue(), "De_Cuong_Hoan_Chinh_Chong_Tran.docx", 
+            st.info("💡 **LƯU Ý:** Thuật toán đã căn đều tự động khoảng cách giữa mốc ĐẠI HỌC và mốc THÀNH PHỐ. Các khối liên quan đã được dính liền nhau cực kỳ chuyên nghiệp!")
+            st.download_button("⬇️ TẢI FILE ĐỀ CƯƠNG LUẬN VĂN (.docx)", bio.getvalue(), "De_Cuong_Hoan_Chinh_Can_Deu.docx", 
                                "application/vnd.openxmlformats-officedocument.wordprocessingml.document", use_container_width=True)
