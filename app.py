@@ -2,33 +2,53 @@ import streamlit as st
 import docx
 from docx.shared import Cm, Pt
 from docx.enum.text import WD_ALIGN_PARAGRAPH
+from docx.enum.section import WD_SECTION
+from docx.oxml.xmlchemy import OxmlElement
+from docx.oxml.shared import qn
 import io
 
 # ==========================================
 # CẤU HÌNH TRANG WEB
 # ==========================================
-st.set_page_config(page_title="Tạo Luận văn Chuẩn ĐHYD", page_icon="🎓", layout="centered")
+st.set_page_config(page_title="Tạo Đề Cương Luận Văn", page_icon="🎓", layout="centered")
 
-st.title("🎓 Trình Tạo Luận Văn Chuẩn")
-st.write("Hệ thống tự động ép chuẩn lề, font, và tự động xử lý lỗi cấu trúc (xóa tiểu mục nếu mục cha chỉ có 1 mục con).")
+st.title("🎓 Trình Tạo Đề Cương Luận Văn Chuẩn")
+st.write("Hệ thống tự động dàn trang bìa có khung viền và ép chuẩn font toàn bộ nội dung.")
 st.divider()
+
+# ==========================================
+# CÁC HÀM CAN THIỆP XML (ĐÓNG KHUNG TRANG BÌA)
+# ==========================================
+def add_page_border(sect_pr):
+    """Vẽ khung viền cho trang"""
+    borders = OxmlElement('w:pgBorders')
+    borders.set(qn('w:offsetFrom'), 'text')
+    for border_name in ['top', 'left', 'bottom', 'right']:
+        border = OxmlElement(f'w:{border_name}')
+        border.set(qn('w:val'), 'single')
+        border.set(qn('w:sz'), '12') # Độ dày viền
+        border.set(qn('w:space'), '24')
+        border.set(qn('w:color'), 'auto')
+        borders.append(border)
+    sect_pr.append(borders)
+
+def clear_page_border(sect_pr):
+    """Xóa khung viền ở các trang sau"""
+    for borders in sect_pr.xpath('./w:pgBorders'):
+        sect_pr.remove(borders)
 
 # ==========================================
 # HÀM ĐỆ QUY TẠO GIAO DIỆN NHẬP LIỆU (TỐI ĐA 4 CẤP)
 # ==========================================
 def render_section(level, prefix, key_prefix):
-    """
-    Tạo các ô nhập liệu lồng nhau. 
-    level: Cấp độ hiện tại (2, 3, 4 tương ứng 1.1, 1.1.1, 1.1.1.1)
-    """
     with st.container(border=True):
         st.markdown(f"**Mục {prefix}**")
         title = st.text_input("Tên mục:", key=f"title_{key_prefix}", label_visibility="collapsed", placeholder=f"Tên mục {prefix}")
         content = st.text_area("Nội dung:", key=f"content_{key_prefix}", height=100, label_visibility="collapsed", placeholder=f"Nội dung mục {prefix}")
         
         children = []
-        if level < 4: # Chỉ cho phép đi sâu tối đa 4 cấp
-            num_children = st.number_input(f"Số tiểu mục con (cấp {level+1}) trong {prefix}:", min_value=0, max_value=15, value=0, step=1, key=f"num_{key_prefix}")
+        if level < 4:
+            num_children = st.number_input(f"Số tiểu mục con trong {prefix}:", min_value=0, max_value=15, value=0, step=1, key=f"num_{key_prefix}")
             for k in range(int(num_children)):
                 child_prefix = f"{prefix}.{k+1}"
                 children.append(render_section(level+1, child_prefix, f"{key_prefix}_{k}"))
@@ -39,21 +59,11 @@ def render_section(level, prefix, key_prefix):
 # THUẬT TOÁN TỈA CÂY (ÉP LUẬT TỐI THIỂU 2 TIỂU MỤC)
 # ==========================================
 def apply_academic_rules(node):
-    """
-    Rà soát cây cấu trúc. Nếu một mục chỉ có 1 tiểu mục con:
-    - Xóa tiêu đề của mục con, biến nó thành đoạn văn bản.
-    - Đưa đoạn văn bản đó lên gộp vào mục cha.
-    - Đẩy các tiểu mục cháu (nếu có) lên một cấp.
-    """
     if node.get("children"):
-        # 1. Đệ quy xử lý từ dưới lên trên (Bottom-up)
         pruned_children = [apply_academic_rules(c) for c in node["children"]]
         
-        # 2. Áp dụng luật "Tối thiểu 2 tiểu mục"
         if len(pruned_children) == 1:
             single_child = pruned_children[0]
-            
-            # Chuyển đổi child thành văn bản và gộp vào cha
             merged_text = single_child["title"]
             if single_child["content"].strip():
                 merged_text += "\n" + single_child["content"]
@@ -63,7 +73,6 @@ def apply_academic_rules(node):
             else:
                 node["content"] = merged_text
                 
-            # Cha nhận nuôi luôn các cháu (thăng cấp cháu lên làm con)
             node["children"] = single_child["children"]
         else:
             node["children"] = pruned_children
@@ -73,24 +82,21 @@ def apply_academic_rules(node):
 # ==========================================
 # GIAO DIỆN NHẬP LIỆU CHÍNH
 # ==========================================
-st.header("I. THÔNG TIN CHUNG")
-thesis_title = st.text_input("Tên Đề tài Luận văn:", placeholder="Ví dụ: SO SÁNH ĐỘNG LỰC HỌC...")
+st.header("I. THÔNG TIN BÌA")
+thesis_title = st.text_input("Tên Đề tài Luận văn:", placeholder="Ví dụ: HIỆU QUẢ CỦA CHƯƠNG TRÌNH CAN THIỆP HABIT-ILE...")
 author_name = st.text_input("Họ và tên tác giả:", placeholder="Ví dụ: TRẦN MINH HOÀNG")
 st.divider()
 
-st.header("II. NỘI DUNG LUẬN VĂN")
+st.header("II. NỘI DUNG")
 
-# 1. ĐẶT VẤN ĐỀ
 st.subheader("ĐẶT VẤN ĐỀ")
 dat_van_de_content = st.text_area("Nội dung phần Đặt vấn đề:", height=200, key="dvd")
 
-# 2. BA CHƯƠNG CHÍNH
 fixed_chapters = [
     "TỔNG QUAN TÀI LIỆU",
     "ĐỐI TƯỢNG VÀ PHƯƠNG PHÁP NGHIÊN CỨU",
     "KẾT QUẢ"
 ]
-
 chapters_data = []
 
 for i, chap_name in enumerate(fixed_chapters):
@@ -111,7 +117,6 @@ for i, chap_name in enumerate(fixed_chapters):
     })
     st.write("---")
 
-# 3. CÁC PHẦN CỐ ĐỊNH CUỐI CÙNG
 st.subheader("KẾT LUẬN VÀ KIẾN NGHỊ")
 ket_luan_content = st.text_area("Nội dung Kết luận và Kiến nghị:", height=200, key="kl")
 
@@ -128,6 +133,13 @@ st.divider()
 # ==========================================
 # CÁC HÀM HỖ TRỢ XUẤT FILE WORD
 # ==========================================
+def add_empty_lines(doc, num_lines, size=16):
+    """Hỗ trợ tạo khoảng cách dòng trống với cỡ chữ chuẩn"""
+    for _ in range(num_lines):
+        p = doc.add_paragraph()
+        r = p.add_run()
+        r.font.size = Pt(size)
+
 def add_main_heading(doc, text):
     p = doc.add_paragraph()
     p.alignment = WD_ALIGN_PARAGRAPH.CENTER
@@ -149,7 +161,6 @@ def add_normal_text(doc, text_content):
             r.font.size = Pt(13)
 
 def write_sections_to_word(doc, children_list, prefix_list):
-    """Đệ quy ghi các mục vào Word, tự động đánh số lại sau khi đã tỉa cành"""
     for i, child in enumerate(children_list):
         current_prefix = prefix_list + [str(i + 1)]
         prefix_str = ".".join(current_prefix)
@@ -175,28 +186,92 @@ def write_sections_to_word(doc, children_list, prefix_list):
 # ==========================================
 if st.button("✨ TẠO FILE WORD HOÀN CHỈNH", type="primary", use_container_width=True):
     if not thesis_title:
-        st.warning("⚠️ Vui lòng nhập Tên Đề tài ở phần Thông tin chung!")
+        st.warning("⚠️ Vui lòng nhập Tên Đề tài ở phần Thông tin bìa!")
     else:
-        with st.spinner("Đang áp dụng luật học thuật và dàn trang..."):
-            # Áp dụng thuật toán tỉa cành cho 3 chương chính
+        with st.spinner("Đang biên dịch trang bìa và dàn trang nội dung..."):
             processed_chapters = [apply_academic_rules(chap) for chap in chapters_data]
 
             doc = docx.Document()
-            for section in doc.sections:
-                section.top_margin, section.bottom_margin = Cm(3.5), Cm(3.0)
-                section.left_margin, section.right_margin = Cm(3.5), Cm(2.0)
+            
+            # Khởi tạo kích thước lề cho Section 1 (Trang bìa)
+            sec_0 = doc.sections[0]
+            sec_0.top_margin, sec_0.bottom_margin = Cm(3.5), Cm(3.0)
+            sec_0.left_margin, sec_0.right_margin = Cm(3.5), Cm(2.0)
+            add_page_border(sec_0._sectPr) # Đóng khung trang bìa
 
             style_normal = doc.styles['Normal']
             style_normal.font.name, style_normal.font.size = 'Times New Roman', Pt(13)
 
-            # Bìa ảo
-            doc.add_paragraph().add_run(thesis_title.upper()).bold = True
-            doc.paragraphs[-1].alignment = WD_ALIGN_PARAGRAPH.CENTER
-            doc.paragraphs[-1].runs[0].font.size = Pt(16)
+            # =====================================
+            # THIẾT KẾ TRANG BÌA THEO YÊU CẦU
+            # =====================================
             
-            doc.add_paragraph().add_run(author_name.upper()).bold = True
-            doc.paragraphs[-1].alignment = WD_ALIGN_PARAGRAPH.CENTER
-            doc.add_page_break()
+            # Hàng 1: BỘ GD&ĐT (Trái) - BỘ Y TẾ (Phải) dùng Table ẩn
+            table = doc.add_table(rows=1, cols=2)
+            p_left = table.cell(0, 0).paragraphs[0]
+            p_left.alignment = WD_ALIGN_PARAGRAPH.LEFT
+            r_left = p_left.add_run("BỘ GIÁO DỤC VÀ ĐÀO TẠO")
+            r_left.font.name, r_left.font.size = 'Times New Roman', Pt(16)
+            
+            p_right = table.cell(0, 1).paragraphs[0]
+            p_right.alignment = WD_ALIGN_PARAGRAPH.RIGHT
+            r_right = p_right.add_run("BỘ Y TẾ")
+            r_right.font.name, r_right.font.size = 'Times New Roman', Pt(16)
+            
+            # Xuống 2 hàng
+            add_empty_lines(doc, 2)
+            
+            # Tên trường
+            p = doc.add_paragraph()
+            p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            r = p.add_run("ĐẠI HỌC Y DƯỢC THÀNH PHỐ HỒ CHÍ MINH")
+            r.bold = True
+            r.font.name, r.font.size = 'Times New Roman', Pt(16)
+            
+            # Xuống 10 hàng
+            add_empty_lines(doc, 10)
+            
+            # Tên tác giả
+            p = doc.add_paragraph()
+            p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            r = p.add_run(author_name.upper())
+            r.bold = True
+            r.font.name, r.font.size = 'Times New Roman', Pt(16)
+            
+            # Xuống 5 hàng
+            add_empty_lines(doc, 5)
+            
+            # Tên đề tài (Size 20)
+            p = doc.add_paragraph()
+            p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            r = p.add_run(thesis_title.upper())
+            r.bold = True
+            r.font.name, r.font.size = 'Times New Roman', Pt(20)
+            
+            # Xuống 5 hàng
+            add_empty_lines(doc, 5)
+            
+            # Loại luận văn
+            p = doc.add_paragraph()
+            p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            r = p.add_run("ĐỀ CƯƠNG LUẬN VĂN THẠC SĨ")
+            r.bold = True
+            r.font.name, r.font.size = 'Times New Roman', Pt(16)
+            
+            # Đẩy phần "TP HCM - NĂM" xuống sát lề dưới (Khoảng 7-8 dòng)
+            add_empty_lines(doc, 7)
+            
+            p = doc.add_paragraph()
+            p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            r = p.add_run("THÀNH PHỐ HỒ CHÍ MINH - NĂM 2026")
+            r.bold = True
+            r.font.name, r.font.size = 'Times New Roman', Pt(16)
+
+            # =====================================
+            # NGẮT TRANG - BẮT ĐẦU PHẦN NỘI DUNG
+            # =====================================
+            new_section = doc.add_section(WD_SECTION.NEW_PAGE)
+            clear_page_border(new_section._sectPr) # Gỡ khung viền cho các trang sau
 
             # Đặt vấn đề
             if dat_van_de_content.strip():
@@ -235,5 +310,5 @@ if st.button("✨ TẠO FILE WORD HOÀN CHỈNH", type="primary", use_container_
             doc.save(bio)
             
             st.success("🎉 Đã xuất file thành công!")
-            st.download_button("⬇️ TẢI FILE LUẬN VĂN (.docx)", bio.getvalue(), "Luan_Van_Chuan_Format.docx", 
+            st.download_button("⬇️ TẢI FILE LUẬN VĂN (.docx)", bio.getvalue(), "De_Cuong_Luan_Van_Hoan_Chinh.docx", 
                                "application/vnd.openxmlformats-officedocument.wordprocessingml.document", use_container_width=True)
