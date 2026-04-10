@@ -85,8 +85,8 @@ def add_toc_to_doc(doc):
     run._r.append(fldChar3)
     
     p_note = doc.add_paragraph()
-    p_note.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    r_note = p_note.add_run("\n[MỤC LỤC ĐANG ẨN]\nBấm chuột phải vào dòng chữ này -> Chọn 'Update Field' (Cập nhật trường) để Word quét số trang và hiển thị Mục lục.")
+    p_note.alignment = WD_ALIGN_PARAGRAPH.LEFT
+    r_note = p_note.add_run("\n[HƯỚNG DẪN HIỂN THỊ MỤC LỤC VÀ CẬP NHẬT SỐ TRANG]\n1. Nhấn nút 'Enable Editing' (Bật chỉnh sửa) màu vàng ở phía trên cùng màn hình Word.\n2. Bấm tổ hợp phím Ctrl + P (để Word nhận diện số trang), sau đó bấm Esc để quay lại.\n3. Nhấp CHUỘT PHẢI vào dòng chữ đỏ này -> Chọn 'Update Field' -> Chọn 'Update entire table' -> OK.\n")
     r_note.font.name, r_note.font.size, r_note.font.italic = 'Times New Roman', Pt(11), True
     r_note.font.color.rgb = RGBColor(255, 0, 0)
 
@@ -137,7 +137,6 @@ supervisor_1 = st.text_input("1. Họ và tên người hướng dẫn 1:", plac
 supervisor_2 = st.text_input("2. Họ và tên người hướng dẫn 2 (Bỏ trống nếu không có):", placeholder="Ví dụ: TS. TRẦN THỊ B")
 
 st.divider()
-
 st.header("II. NỘI DUNG")
 
 st.subheader("ĐẶT VẤN ĐỀ")
@@ -306,7 +305,7 @@ if st.button("✨ TẠO FILE WORD HOÀN CHỈNH", type="primary", use_container_
             title_lines = (len(thesis_title) // 40) + 1
 
             # =====================================
-            # SECTION 1: TRANG BÌA CHÍNH
+            # SECTION 1: TRANG BÌA CHÍNH (KHÔNG SỐ TRANG)
             # =====================================
             sec_0 = doc.sections[0]
             sec_0.top_margin, sec_0.bottom_margin = Cm(3.5), Cm(3.0)
@@ -330,7 +329,7 @@ if st.button("✨ TẠO FILE WORD HOÀN CHỈNH", type="primary", use_container_
             r.bold, r.font.name, r.font.size = True, 'Times New Roman', Pt(16)
 
             # =====================================
-            # SECTION 2: TRANG BÌA PHỤ
+            # SECTION 2: TRANG BÌA PHỤ (KHÔNG SỐ TRANG)
             # =====================================
             new_section_cover_2 = doc.add_section(WD_SECTION.NEW_PAGE)
             new_section_cover_2.top_margin, new_section_cover_2.bottom_margin = Cm(3.5), Cm(3.0)
@@ -403,15 +402,26 @@ if st.button("✨ TẠO FILE WORD HOÀN CHỈNH", type="primary", use_container_
             new_section_content = doc.add_section(WD_SECTION.NEW_PAGE)
             clear_page_border(new_section_content._sectPr)
             
+            # --- TÁCH HEADER VÀ GẮN SỐ TRANG ---
             new_section_content.header.is_linked_to_previous = False
             header_para = new_section_content.header.paragraphs[0]
             header_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
             add_page_number(header_para) 
             
+            # --- SỬA LỖI XML: Ép Word bắt đầu từ trang 1 ---
             sectPr = new_section_content._sectPr
             pgNumType = OxmlElement('w:pgNumType')
             pgNumType.set(qn('w:start'), '1')
-            sectPr.append(pgNumType)
+            
+            # Phải chèn thẻ đếm trang vào đúng khe hở trước thẻ <w:cols> hoặc <w:docGrid>
+            cols = sectPr.xpath('./w:cols')
+            docGrid = sectPr.xpath('./w:docGrid')
+            if cols:
+                cols[0].addprevious(pgNumType)
+            elif docGrid:
+                docGrid[0].addprevious(pgNumType)
+            else:
+                sectPr.append(pgNumType)
 
             if dat_van_de_content.strip():
                 add_main_heading(doc, "ĐẶT VẤN ĐỀ")
@@ -436,13 +446,11 @@ if st.button("✨ TẠO FILE WORD HOÀN CHỈNH", type="primary", use_container_
             new_section_end.header.is_linked_to_previous = False
             for hp in new_section_end.header.paragraphs: hp.text = "" 
 
-            # --- LUÔN IN TRANG TÀI LIỆU THAM KHẢO ---
             add_main_heading(doc, "TÀI LIỆU THAM KHẢO")
             if tai_lieu_content.strip():
                 add_normal_text(doc, tai_lieu_content)
             doc.add_page_break()
 
-            # --- LUÔN IN TRANG PHỤ LỤC ---
             add_main_heading(doc, "PHỤ LỤC")
             if phu_luc_content.strip():
                 add_normal_text(doc, phu_luc_content)
@@ -451,6 +459,6 @@ if st.button("✨ TẠO FILE WORD HOÀN CHỈNH", type="primary", use_container_
             doc.save(bio)
             
             st.success("🎉 Đã xuất file thành công!")
-            st.info("💡 **MẸO DÙNG MỤC LỤC:** Khi mở file Word tải về, Word sẽ hỏi 'Do you want to update fields...', bạn hãy bấm **Yes**. Hoặc bạn tới trang Mục lục, nhấp chuột phải vào dòng chữ đỏ và chọn **'Update Field'**!")
+            st.info("💡 **MẸO DÙNG MỤC LỤC:** Khi mở file Word tải về, hãy làm đúng theo 3 bước hướng dẫn màu đỏ ở trang Mục lục nhé!")
             st.download_button("⬇️ TẢI FILE ĐỀ CƯƠNG LUẬN VĂN (.docx)", bio.getvalue(), "De_Cuong_Hoan_Chinh.docx", 
                                "application/vnd.openxmlformats-officedocument.wordprocessingml.document", use_container_width=True)
