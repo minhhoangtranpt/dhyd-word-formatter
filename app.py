@@ -21,7 +21,7 @@ def styled_header(text, color, background="#ffffff"):
     """, unsafe_allow_html=True)
 
 st.markdown("<h1 style='text-align: center; color: #800000;'>🎓 TRÌNH TẠO ĐỀ CƯƠNG LUẬN VĂN</h1>", unsafe_allow_html=True)
-st.markdown("<p style='text-align: center; color: #555;'>Hệ thống tự động dàn trang, khóa mốc hàng bìa, và phân tách luồng xuất file Bìa/Nội dung có bảo mật.</p>", unsafe_allow_html=True)
+st.markdown("<p style='text-align: center; color: #555;'>Hệ thống tự động dàn trang, khóa mốc hàng bìa, và xuất file đề cương hoàn chỉnh có bảo mật.</p>", unsafe_allow_html=True)
 st.write("---")
 
 # ==========================================
@@ -56,6 +56,10 @@ def add_page_number(paragraph):
     run.append(fldChar2)
     run.append(fldChar3)
     p.append(run)
+
+def clear_page_border(sect_pr):
+    for borders in sect_pr.xpath('./w:pgBorders'):
+        sect_pr.remove(borders)
 
 def setup_toc_styles(doc):
     for i in range(1, 4):
@@ -256,8 +260,8 @@ with tab_bia:
         supervisor_2 = st.text_input("2. Họ và tên người hướng dẫn 2 (Bỏ trống nếu không có):", placeholder="Ví dụ: TS. TRẦN THỊ B")
     
     st.write("---")
-    # NÚT XUẤT CHỈ DÀNH CHO BÌA
-    if st.button("📄 XUẤT FILE CHỈ TRANG BÌA", type="secondary", use_container_width=True):
+    # NÚT XUẤT CHỈ DÀNH CHO BÌA (Tùy chọn phụ, xuất nhanh để xem layout bìa)
+    if st.button("📄 XUẤT NHANH BẢN NHÁP TRANG BÌA", type="secondary", use_container_width=True):
         if not thesis_title or not supervisor_1:
             st.error("❌ Lỗi: Bạn phải điền đầy đủ Tên Đề Tài và Người hướng dẫn 1.")
         else:
@@ -374,7 +378,7 @@ with tab_bia:
                 doc_bia.save(bio_bia)
                 
                 st.success("🎉 Đã tạo Trang Bìa thành công!")
-                st.download_button("⬇️ TẢI FILE BÌA (.docx)", bio_bia.getvalue(), "Trang_Bia_Luan_Van.docx", 
+                st.download_button("⬇️ TẢI BẢN NHÁP TRANG BÌA (.docx)", bio_bia.getvalue(), "Trang_Bia_Luan_Van.docx", 
                                    "application/vnd.openxmlformats-officedocument.wordprocessingml.document", use_container_width=True)
 
 # ------------------------------------------
@@ -409,7 +413,7 @@ with tab_noidung:
     c4_children = [render_section(2, f"4.{j+1}", f"c4_sec_{j}") for j in range(c4_num)]
 
 # ------------------------------------------
-# TAB 3: PHỤ LỤC, BẢO MẬT & XUẤT FILE NỘI DUNG
+# TAB 3: PHỤ LỤC, BẢO MẬT & XUẤT FILE TOÀN BỘ
 # ------------------------------------------
 with tab_cuoi:
     styled_header("DANH MỤC & TÀI LIỆU", "#16A085", "#E8F8F5")
@@ -419,16 +423,16 @@ with tab_cuoi:
     
     st.divider()
     
-    # === KHU VỰC BẢO MẬT & XUẤT FILE NỘI DUNG ===
-    styled_header("🔒 BẢO MẬT XUẤT FILE NỘI DUNG", "#C0392B", "#F9EBEA")
-    st.info("Bản quyền nội dung được bảo vệ. Vui lòng nhập mật khẩu để tải file chứa các Chương.")
+    # === KHU VỰC BẢO MẬT & XUẤT FILE CHÍNH ===
+    styled_header("🔒 BẢO MẬT & XUẤT FILE HOÀN CHỈNH", "#C0392B", "#F9EBEA")
+    st.info("File tải về từ đây sẽ chứa TOÀN BỘ ĐỀ CƯƠNG (bao gồm cả Trang bìa, Mục lục và Nội dung). Vui lòng nhập mật khẩu để tiếp tục.")
     
     pwd = st.text_input("Nhập mật khẩu (Mặc định là 123456):", type="password")
     
     if pwd == "123456": # MẬT KHẨU Ở ĐÂY
         st.success("✅ Đã mở khóa tính năng xuất file Nội dung!")
-        if st.button("✨ XUẤT FILE NỘI DUNG (.docx)", type="primary", use_container_width=True):
-            with st.spinner("Đang kết xuất dữ liệu và tạo Mục lục tự động..."):
+        if st.button("✨ XUẤT FILE TOÀN BỘ ĐỀ CƯƠNG (.docx)", type="primary", use_container_width=True):
+            with st.spinner("Đang kết xuất dữ liệu, nối bìa và tạo Mục lục tự động..."):
                 c1_processed = {"title": "TỔNG QUAN TÀI LIỆU", "content": c1_intro, "children": [apply_academic_rules(c) for c in c1_children]}
                 c2_processed = {"title": "PHƯƠNG PHÁP NGHIÊN CỨU", "content": c2_intro, "children": c2_children}
                 c3_processed = {"title": "DỰ KIẾN KẾT QUẢ", "content": c3_intro, "children": [apply_academic_rules(c) for c in c3_children]}
@@ -447,48 +451,160 @@ with tab_cuoi:
                 except Exception:
                     pass
 
-                # Cài đặt Margins cho file Nội dung
+                title_lines = (len(thesis_title) // 40) + 1
+                has_logo = os.path.exists("logo_UMP.png")
+                has_sup2 = bool(supervisor_2.strip())
+
+                # =====================================
+                # SECTION 1: TRANG BÌA CHÍNH (CÓ LOGO)
+                # =====================================
                 sec_0 = doc_nd.sections[0]
                 sec_0.top_margin, sec_0.bottom_margin = Cm(3.5), Cm(3.0)
                 sec_0.left_margin, sec_0.right_margin = Cm(3.5), Cm(2.0)
+                add_page_border(sec_0._sectPr)
+
+                table = doc_nd.add_table(rows=1, cols=2)
+                p_left = table.cell(0, 0).paragraphs[0]
+                p_left.paragraph_format.space_after = Pt(0)
+                p_left.paragraph_format.line_spacing = 1.5
+                p_left.alignment = WD_ALIGN_PARAGRAPH.LEFT
+                r_left = p_left.add_run("BỘ GIÁO DỤC VÀ ĐÀO TẠO")
+                r_left.font.name, r_left.font.size = 'Times New Roman', Pt(16)
+                
+                p_right = table.cell(0, 1).paragraphs[0]
+                p_right.paragraph_format.space_after = Pt(0)
+                p_right.paragraph_format.line_spacing = 1.5
+                p_right.alignment = WD_ALIGN_PARAGRAPH.RIGHT
+                r_right = p_right.add_run("BỘ Y TẾ")
+                r_right.font.name, r_right.font.size = 'Times New Roman', Pt(16)
+                
+                add_cover_para(doc_nd, "ĐẠI HỌC Y DƯỢC THÀNH PHỐ HỒ CHÍ MINH", 16, True)
+
+                g1_b1 = 1; g2_b1 = 2; g3_b1 = 1; g4_b1 = 3
+                g5_b1 = max(1, 23 - (10 + title_lines) - g1_b1 - g2_b1 - g3_b1 - g4_b1)
+
+                if has_logo:
+                    add_empty_lines(doc_nd, g1_b1, 16)
+                    try:
+                        p_logo = doc_nd.add_paragraph()
+                        p_logo.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                        p_logo.paragraph_format.space_after = Pt(0)
+                        p_logo.paragraph_format.line_spacing = 1.5
+                        r_logo = p_logo.add_run()
+                        r_logo.add_picture("logo_UMP.png", width=Cm(3.5)) 
+                    except Exception:
+                        pass
+                else:
+                    g2_b1 += 5
+
+                add_empty_lines(doc_nd, g2_b1, 16)
+                add_cover_para(doc_nd, author_name.upper(), 16, True)
+                
+                add_empty_lines(doc_nd, g3_b1, 16)
+                add_cover_para(doc_nd, thesis_title.upper(), 20, True)
+
+                add_empty_lines(doc_nd, g4_b1, 16)
+                add_cover_para(doc_nd, "ĐỀ CƯƠNG LUẬN VĂN THẠC SĨ", 16, True)
+
+                add_empty_lines(doc_nd, g5_b1, 16)
+                add_cover_para(doc_nd, "THÀNH PHỐ HỒ CHÍ MINH - NĂM 2026", 16, True)
 
                 # =====================================
-                # SECTION 1: CÁC TRANG DANH MỤC ĐỆM (SỐ LA MÃ)
+                # SECTION 2: TRANG BÌA PHỤ (KHÔNG LOGO)
                 # =====================================
-                header_para = sec_0.header.paragraphs[0]
+                sec_2 = doc_nd.add_section(WD_SECTION.NEW_PAGE)
+                sec_2.top_margin, sec_2.bottom_margin = Cm(3.5), Cm(3.0)
+                sec_2.left_margin, sec_2.right_margin = Cm(3.5), Cm(2.0)
+                add_page_border(sec_2._sectPr)
+
+                table_2 = doc_nd.add_table(rows=1, cols=2)
+                p_left_2 = table_2.cell(0, 0).paragraphs[0]
+                p_left_2.paragraph_format.space_after = Pt(0)
+                p_left_2.paragraph_format.line_spacing = 1.5
+                p_left_2.alignment = WD_ALIGN_PARAGRAPH.LEFT
+                r_left_2 = p_left_2.add_run("BỘ GIÁO DỤC VÀ ĐÀO TẠO")
+                r_left_2.font.name, r_left_2.font.size = 'Times New Roman', Pt(16)
+                
+                p_right_2 = table_2.cell(0, 1).paragraphs[0]
+                p_right_2.paragraph_format.space_after = Pt(0)
+                p_right_2.paragraph_format.line_spacing = 1.5
+                p_right_2.alignment = WD_ALIGN_PARAGRAPH.RIGHT
+                r_right_2 = p_right_2.add_run("BỘ Y TẾ")
+                r_right_2.font.name, r_right_2.font.size = 'Times New Roman', Pt(16)
+                
+                add_cover_para(doc_nd, "ĐẠI HỌC Y DƯỢC THÀNH PHỐ HỒ CHÍ MINH", 16, True)
+
+                g1_b2 = 3; g2_b2 = 1 
+                g3_b2 = max(1, 10 - title_lines - g1_b2 - g2_b2) 
+
+                add_empty_lines(doc_nd, g1_b2, 16)
+                add_cover_para(doc_nd, author_name.upper(), 16, True)
+                
+                add_empty_lines(doc_nd, g2_b2, 16)
+                add_cover_para(doc_nd, thesis_title.upper(), 20, True)
+                add_empty_lines(doc_nd, g3_b2, 16)
+
+                add_cover_para(doc_nd, "NGÀNH: KỸ THUẬT PHỤC HỒI CHỨC NĂNG", 16, True) 
+                add_cover_para(doc_nd, "MÃ SỐ: 8720603", 16, True) 
+                add_empty_lines(doc_nd, 1, 16) 
+                add_cover_para(doc_nd, "ĐỀ CƯƠNG LUẬN VĂN THẠC SĨ", 16, True) 
+                add_empty_lines(doc_nd, 1, 16) 
+                add_cover_para(doc_nd, "NGƯỜI DỰ KIẾN HƯỚNG DẪN KHOA HỌC:", 16, True) 
+
+                if not has_sup2:
+                    add_cover_para(doc_nd, f"{supervisor_1.upper()}", 16, True) 
+                    add_empty_lines(doc_nd, 2, 16) 
+                else:
+                    add_cover_para(doc_nd, f"1. {supervisor_1.upper()}", 16, True) 
+                    add_cover_para(doc_nd, f"2. {supervisor_2.upper()}", 16, True) 
+                    add_empty_lines(doc_nd, 1, 16) 
+
+                add_cover_para(doc_nd, "THÀNH PHỐ HỒ CHÍ MINH - NĂM 2026", 16, True)
+
+                # =====================================
+                # SECTION 3: CÁC TRANG DANH MỤC ĐỆM (SỐ LA MÃ)
+                # =====================================
+                new_sec_prelim = doc_nd.add_section(WD_SECTION.NEW_PAGE)
+                clear_page_border(new_sec_prelim._sectPr)
+                
+                new_sec_prelim.header.is_linked_to_previous = False
+                header_para = new_sec_prelim.header.paragraphs[0]
                 header_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
                 add_page_number(header_para) 
-                set_pgnum_type(sec_0._sectPr, fmt='lowerRoman', start='1')
+                set_pgnum_type(new_sec_prelim._sectPr, fmt='lowerRoman', start='1')
                 
                 add_toc_to_doc(doc_nd)
                 doc_nd.add_page_break()
 
-                add_main_heading(doc_nd, "DANH MỤC CÁC TỪ VIẾT TẮT")
+                # Thay đổi chữ thường (Title case) cho các Danh mục
+                add_main_heading(doc_nd, "Danh mục các từ viết tắt")
                 create_two_col_table(doc_nd, "Từ viết tắt", "Ý nghĩa")
                 doc_nd.add_page_break()
 
-                add_main_heading(doc_nd, "DANH MỤC ĐỐI CHIẾU CÁC THUẬT NGỮ ANH - VIỆT")
+                add_main_heading(doc_nd, "Danh mục đối chiếu các thuật ngữ Anh - Việt")
                 create_two_col_table(doc_nd, "Tiếng Anh", "Tiếng Việt")
                 doc_nd.add_page_break()
 
-                add_main_heading(doc_nd, "DANH MỤC CÁC BẢNG")
+                add_main_heading(doc_nd, "Danh mục các bảng")
                 p_b = doc_nd.add_paragraph("(Chèn danh mục bảng tự động tại đây bằng Word)")
                 p_b.alignment = WD_ALIGN_PARAGRAPH.CENTER
                 doc_nd.add_page_break()
 
-                add_main_heading(doc_nd, "DANH MỤC CÁC HÌNH")
+                add_main_heading(doc_nd, "Danh mục các hình")
                 p_h = doc_nd.add_paragraph("(Chèn danh mục hình tự động tại đây bằng Word)")
                 p_h.alignment = WD_ALIGN_PARAGRAPH.CENTER
                 doc_nd.add_page_break()
 
-                add_main_heading(doc_nd, "DANH MỤC CÁC SƠ ĐỒ")
+                add_main_heading(doc_nd, "Danh mục các sơ đồ")
                 p_s = doc_nd.add_paragraph("(Chèn danh mục sơ đồ tự động tại đây bằng Word)")
                 p_s.alignment = WD_ALIGN_PARAGRAPH.CENTER
 
                 # =====================================
-                # SECTION 2: BẮT ĐẦU NỘI DUNG (SỐ Ả RẬP)
+                # SECTION 4: BẮT ĐẦU NỘI DUNG (SỐ Ả RẬP)
                 # =====================================
                 new_sec_main = doc_nd.add_section(WD_SECTION.NEW_PAGE)
+                clear_page_border(new_sec_main._sectPr)
+                
                 new_sec_main.header.is_linked_to_previous = False
                 header_para_main = new_sec_main.header.paragraphs[0]
                 header_para_main.alignment = WD_ALIGN_PARAGRAPH.CENTER
@@ -507,12 +623,12 @@ with tab_cuoi:
                     doc_nd.add_page_break()
 
                 if danh_muc_content.strip():
-                    add_main_heading(doc_nd, "DANH MỤC CÁC CÔNG TRÌNH CÔNG BỐ CÓ LIÊN QUAN")
+                    add_main_heading(doc_nd, "DANH MỤC CÁC CÔNG TRÌNH CÔNG BỐ CÓ LIÊN QUAN") # Giữ nguyên IN HOA theo quy định
                     add_normal_text(doc_nd, danh_muc_content)
                     doc_nd.add_page_break()
 
                 # =====================================
-                # SECTION 3: TÀI LIỆU THAM KHẢO & PHỤ LỤC 
+                # SECTION 5: TÀI LIỆU THAM KHẢO & PHỤ LỤC 
                 # =====================================
                 new_sec_end = doc_nd.add_section(WD_SECTION.CONTINUOUS)
                 new_sec_end.header.is_linked_to_previous = False
@@ -530,7 +646,7 @@ with tab_cuoi:
                 bio_nd = io.BytesIO()
                 doc_nd.save(bio_nd)
                 
-                st.download_button("⬇️ CLICK ĐỂ TẢI FILE NỘI DUNG", bio_nd.getvalue(), "Noi_Dung_De_Cuong.docx", 
+                st.download_button("⬇️ CLICK ĐỂ TẢI FILE ĐỀ CƯƠNG HOÀN CHỈNH", bio_nd.getvalue(), "De_Cuong_Toan_Bo.docx", 
                                    "application/vnd.openxmlformats-officedocument.wordprocessingml.document", use_container_width=True)
 
     elif pwd != "":
