@@ -53,20 +53,16 @@ def add_page_number(paragraph):
     p.append(run)
 
 def add_toc_to_doc(doc):
-    """Tiêm mã XML tạo Mục Lục Tự Động của Word"""
-    # 1. Tiêu đề Mục lục
     p = doc.add_paragraph()
     p.alignment = WD_ALIGN_PARAGRAPH.CENTER
     r = p.add_run("MỤC LỤC")
     r.bold, r.font.name, r.font.size = True, 'Times New Roman', Pt(14)
     
-    # 2. Chữ "Trang" ở góc phải
     p_trang = doc.add_paragraph()
     p_trang.alignment = WD_ALIGN_PARAGRAPH.RIGHT
     r_trang = p_trang.add_run("Trang")
     r_trang.bold, r_trang.font.name, r_trang.font.size = True, 'Times New Roman', Pt(13)
     
-    # 3. Mã XML khung Mục Lục
     p_toc = doc.add_paragraph()
     run = p_toc.add_run()
     
@@ -75,7 +71,7 @@ def add_toc_to_doc(doc):
     
     instrText = OxmlElement('w:instrText')
     instrText.set(qn('xml:space'), 'preserve')
-    instrText.text = r'TOC \o "1-3" \h \z \u' # Hỗ trợ nhận diện 3 cấp (Heading 1 -> 3)
+    instrText.text = r'TOC \o "1-3" \h \z \u'
     
     fldChar2 = OxmlElement('w:fldChar')
     fldChar2.set(qn('w:fldCharType'), 'separate')
@@ -86,13 +82,13 @@ def add_toc_to_doc(doc):
     run._r.append(fldChar1)
     run._r.append(instrText)
     run._r.append(fldChar2)
-    
-    # Lời nhắc sinh viên cập nhật mục lục
-    r2 = p_toc.add_run("\n(MỤC LỤC TỰ ĐỘNG: Mở file Word, click chuột phải vào dòng chữ này và chọn 'Update Field' -> 'Update entire table' để hiển thị toàn bộ mục lục và số trang)")
-    r2.font.name, r2.font.size, r2.font.italic = 'Times New Roman', Pt(12), True
-    r2.font.color.rgb = RGBColor(128, 128, 128)
-    
     run._r.append(fldChar3)
+    
+    p_note = doc.add_paragraph()
+    p_note.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    r_note = p_note.add_run("\n[MỤC LỤC ĐANG ẨN]\nBấm chuột phải vào dòng chữ này -> Chọn 'Update Field' (Cập nhật trường) để Word quét số trang và hiển thị Mục lục.")
+    r_note.font.name, r_note.font.size, r_note.font.italic = 'Times New Roman', Pt(11), True
+    r_note.font.color.rgb = RGBColor(255, 0, 0)
 
 # ==========================================
 # HÀM ĐỆ QUY TẠO GIAO DIỆN NHẬP LIỆU
@@ -141,6 +137,7 @@ supervisor_1 = st.text_input("1. Họ và tên người hướng dẫn 1:", plac
 supervisor_2 = st.text_input("2. Họ và tên người hướng dẫn 2 (Bỏ trống nếu không có):", placeholder="Ví dụ: TS. TRẦN THỊ B")
 
 st.divider()
+
 st.header("II. NỘI DUNG")
 
 st.subheader("ĐẶT VẤN ĐỀ")
@@ -202,7 +199,6 @@ def add_empty_lines(doc, num_lines, size=16):
         r.font.size = Pt(size)
 
 def add_main_heading(doc, text):
-    """Sử dụng Heading 1 để mục lục tự động nhận diện"""
     try:
         p = doc.add_paragraph(style='Heading 1')
     except KeyError:
@@ -212,7 +208,7 @@ def add_main_heading(doc, text):
     r = p.runs[0] if p.runs else p.add_run()
     r.text = text.upper()
     r.bold, r.font.name, r.font.size = True, 'Times New Roman', Pt(14)
-    r.font.color.rgb = RGBColor(0, 0, 0) # Ép lại màu đen thay vì màu xanh mặc định của Word
+    r.font.color.rgb = RGBColor(0, 0, 0) 
 
 def add_normal_text(doc, text_content):
     if not text_content.strip(): return
@@ -226,7 +222,6 @@ def add_normal_text(doc, text_content):
             r.font.name, r.font.size = 'Times New Roman', Pt(13)
 
 def write_sections_to_word(doc, children_list, prefix_list):
-    """Sử dụng Heading 2, 3 để mục lục tự động nhận diện"""
     for i, child in enumerate(children_list):
         current_prefix = prefix_list + [str(i + 1)]
         prefix_str = ".".join(current_prefix)
@@ -290,7 +285,7 @@ if st.button("✨ TẠO FILE WORD HOÀN CHỈNH", type="primary", use_container_
     if not thesis_title or not supervisor_1:
         st.warning("⚠️ Vui lòng nhập Tên Đề tài và ít nhất 1 Người hướng dẫn!")
     else:
-        with st.spinner("Đang biên dịch Mục lục và dàn trang tài liệu..."):
+        with st.spinner("Đang dàn trang, đánh số tự động và thiết lập Header..."):
             c1_processed = {"title": "TỔNG QUAN TÀI LIỆU", "content": c1_intro, "children": [apply_academic_rules(c) for c in c1_children]}
             c2_processed = {"title": "PHƯƠNG PHÁP NGHIÊN CỨU", "content": c2_intro, "children": c2_children}
             c3_processed = {"title": "DỰ KIẾN KẾT QUẢ", "content": c3_intro, "children": [apply_academic_rules(c) for c in c3_children]}
@@ -300,6 +295,14 @@ if st.button("✨ TẠO FILE WORD HOÀN CHỈNH", type="primary", use_container_
             doc = docx.Document()
             style_normal = doc.styles['Normal']
             style_normal.font.name, style_normal.font.size = 'Times New Roman', Pt(13)
+
+            try:
+                element_updatefields = OxmlElement('w:updateFields')
+                element_updatefields.set(qn('w:val'), 'true')
+                doc.settings.element.append(element_updatefields)
+            except Exception:
+                pass
+
             title_lines = (len(thesis_title) // 40) + 1
 
             # =====================================
@@ -384,19 +387,18 @@ if st.button("✨ TẠO FILE WORD HOÀN CHỈNH", type="primary", use_container_
             r.bold, r.font.name, r.font.size = True, 'Times New Roman', Pt(16)
 
             # =====================================
-            # SECTION 2.5: MỤC LỤC TỰ ĐỘNG (KHÔNG SỐ TRANG)
+            # SECTION 2.5: MỤC LỤC TỰ ĐỘNG
             # =====================================
             new_section_toc = doc.add_section(WD_SECTION.NEW_PAGE)
             clear_page_border(new_section_toc._sectPr)
             
-            # Ngắt Header để không dính líu đến bìa hoặc các trang sau
             new_section_toc.header.is_linked_to_previous = False
             for hp in new_section_toc.header.paragraphs: hp.text = "" 
             
             add_toc_to_doc(doc)
 
             # =====================================
-            # SECTION 3: BẮT ĐẦU NỘI DUNG (SỐ TRANG BẮT ĐẦU TỪ 1)
+            # SECTION 3: BẮT ĐẦU NỘI DUNG
             # =====================================
             new_section_content = doc.add_section(WD_SECTION.NEW_PAGE)
             clear_page_border(new_section_content._sectPr)
@@ -428,25 +430,27 @@ if st.button("✨ TẠO FILE WORD HOÀN CHỈNH", type="primary", use_container_
                 doc.add_page_break()
 
             # =====================================
-            # SECTION 4: TÀI LIỆU THAM KHẢO & PHỤ LỤC (KHÔNG SỐ TRANG)
+            # SECTION 4: TÀI LIỆU THAM KHẢO & PHỤ LỤC 
             # =====================================
             new_section_end = doc.add_section(WD_SECTION.CONTINUOUS)
             new_section_end.header.is_linked_to_previous = False
             for hp in new_section_end.header.paragraphs: hp.text = "" 
 
+            # --- LUÔN IN TRANG TÀI LIỆU THAM KHẢO ---
+            add_main_heading(doc, "TÀI LIỆU THAM KHẢO")
             if tai_lieu_content.strip():
-                add_main_heading(doc, "TÀI LIỆU THAM KHẢO")
                 add_normal_text(doc, tai_lieu_content)
-                doc.add_page_break()
+            doc.add_page_break()
 
+            # --- LUÔN IN TRANG PHỤ LỤC ---
+            add_main_heading(doc, "PHỤ LỤC")
             if phu_luc_content.strip():
-                add_main_heading(doc, "PHỤ LỤC")
                 add_normal_text(doc, phu_luc_content)
 
             bio = io.BytesIO()
             doc.save(bio)
             
             st.success("🎉 Đã xuất file thành công!")
-            st.info("💡 **Mẹo:** Mở file Word, tới trang Mục lục, nhấp chuột phải và chọn **'Update Field'** để hệ thống tự động chạy số trang!")
+            st.info("💡 **MẸO DÙNG MỤC LỤC:** Khi mở file Word tải về, Word sẽ hỏi 'Do you want to update fields...', bạn hãy bấm **Yes**. Hoặc bạn tới trang Mục lục, nhấp chuột phải vào dòng chữ đỏ và chọn **'Update Field'**!")
             st.download_button("⬇️ TẢI FILE ĐỀ CƯƠNG LUẬN VĂN (.docx)", bio.getvalue(), "De_Cuong_Hoan_Chinh.docx", 
                                "application/vnd.openxmlformats-officedocument.wordprocessingml.document", use_container_width=True)
