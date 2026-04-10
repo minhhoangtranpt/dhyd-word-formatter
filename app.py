@@ -14,14 +14,14 @@ import io
 st.set_page_config(page_title="Tạo Đề Cương Luận Văn", page_icon="🎓", layout="centered")
 
 st.title("🎓 Trình Tạo Đề Cương Luận Văn Chuẩn")
-st.write("Hệ thống tự động dàn trang, thuật toán neo đáy chống tràn, chèn LOGO, tạo MỤC LỤC, bảng Danh mục và số trang kép.")
+st.write("Hệ thống tự động dàn trang, thuật toán neo đáy chống tràn vô hình, chèn LOGO, tạo MỤC LỤC và số trang kép.")
 st.divider()
 
 # ==========================================
 # CÁC HÀM CAN THIỆP XML & THUẬT TOÁN DÀN TRANG
 # ==========================================
 def distribute_spaces(defaults, excess):
-    """Thuật toán phân bổ khoảng trống: Rút bớt dòng thừa từ dưới lên trên, đảm bảo tối thiểu luôn >= 1 dòng trống"""
+    """Thuật toán rút khoảng trống từ dưới lên trên, cam kết mọi khoảng trống tối thiểu >= 1"""
     spaces = list(defaults)
     while excess > 0:
         reduced = False
@@ -75,11 +75,9 @@ def setup_toc_styles(doc):
             style = doc.styles[style_name]
         except KeyError:
             style = doc.styles.add_style(style_name, WD_STYLE_TYPE.PARAGRAPH)
-        
         style.font.name = 'Times New Roman'
         style.font.size = Pt(13)
         style.font.bold = False 
-        
         if i == 1:
             style.paragraph_format.left_indent = Cm(0)
         elif i == 2:
@@ -141,11 +139,9 @@ def set_pgnum_type(sectPr, fmt='decimal', start='1'):
 def create_two_col_table(doc, col1_name, col2_name):
     table = doc.add_table(rows=1, cols=2)
     table.style = 'Table Grid'
-    
     hdr_cells = table.rows[0].cells
     hdr_cells[0].text = col1_name
     hdr_cells[1].text = col2_name
-    
     for cell in hdr_cells:
         for p in cell.paragraphs:
             p.alignment = WD_ALIGN_PARAGRAPH.CENTER
@@ -153,11 +149,9 @@ def create_two_col_table(doc, col1_name, col2_name):
                 r.bold = True
                 r.font.name = 'Times New Roman'
                 r.font.size = Pt(13)
-                
     for row in table.rows:
         row.cells[0].width = Cm(4.5)
         row.cells[1].width = Cm(11.0)
-        
     for _ in range(3):
         table.add_row()
 
@@ -169,14 +163,12 @@ def render_section(level, prefix, key_prefix):
         st.markdown(f"**Mục {prefix}**")
         title = st.text_input("Tên mục:", key=f"title_{key_prefix}", label_visibility="collapsed", placeholder=f"Tên mục {prefix}")
         content = st.text_area("Nội dung:", key=f"content_{key_prefix}", height=100, label_visibility="collapsed", placeholder=f"Nội dung mục {prefix}")
-        
         children = []
         if level < 4:
             num_children = st.number_input(f"Số tiểu mục con trong {prefix}:", min_value=0, max_value=15, value=0, step=1, key=f"num_{key_prefix}")
             for k in range(int(num_children)):
                 child_prefix = f"{prefix}.{k+1}"
                 children.append(render_section(level+1, child_prefix, f"{key_prefix}_{k}"))
-                
     return {"title": title, "content": content, "children": children}
 
 def apply_academic_rules(node):
@@ -260,21 +252,35 @@ phu_luc_content = st.text_area("Nội dung Phụ lục (Nếu có):", height=200
 st.divider()
 
 # ==========================================
-# CÁC HÀM HỖ TRỢ XUẤT FILE WORD VÀ GẮN HEADING
+# CÁC HÀM HỖ TRỢ XUẤT FILE WORD 
 # ==========================================
 def add_empty_lines(doc, num_lines, size=16):
+    """Tạo dòng trống đã xóa bỏ hoàn toàn khoảng đệm thừa"""
     if num_lines > 0:
         for _ in range(int(num_lines)):
             p = doc.add_paragraph()
+            p.paragraph_format.space_after = Pt(0)
+            p.paragraph_format.line_spacing = 1.0
             r = p.add_run()
             r.font.size = Pt(size)
+
+def add_cover_para(doc, text, size=16, bold=True):
+    """Hàm tạo dòng chữ ở trang bìa bị ÉP CỨNG không có khoảng cách dư (Space After = 0)"""
+    p = doc.add_paragraph()
+    p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    p.paragraph_format.space_after = Pt(0)
+    p.paragraph_format.line_spacing = 1.0
+    r = p.add_run(text)
+    r.bold = bold
+    r.font.name = 'Times New Roman'
+    r.font.size = Pt(size)
+    return p
 
 def add_main_heading(doc, text):
     try:
         p = doc.add_paragraph(style='Heading 1')
     except KeyError:
         p = doc.add_paragraph()
-        
     p.alignment = WD_ALIGN_PARAGRAPH.CENTER
     r = p.runs[0] if p.runs else p.add_run()
     r.text = text 
@@ -304,10 +310,8 @@ def write_sections_to_word(doc, children_list, prefix_list):
                 p = doc.add_paragraph(style=style_name)
             except KeyError:
                 p = doc.add_paragraph()
-                
             p.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
             p.paragraph_format.first_line_indent = Cm(0) 
-            
             title_text = f"{prefix_str}. {child['title']}" if child['title'].strip() else f"{prefix_str}."
             r = p.runs[0] if p.runs else p.add_run()
             r.text = title_text
@@ -318,6 +322,51 @@ def write_sections_to_word(doc, children_list, prefix_list):
             if child.get("children"):
                 write_sections_to_word(doc, child["children"], current_prefix)
 
+def render_cover_header_and_title(doc, author_name, thesis_title, spaces, insert_logo=False):
+    """Khung in 2 hàng đầu và Tiêu đề. Các khoảng trống lấy từ mảng spaces"""
+    table = doc.add_table(rows=1, cols=2)
+    p_left = table.cell(0, 0).paragraphs[0]
+    p_left.paragraph_format.space_after = Pt(0)
+    p_left.paragraph_format.line_spacing = 1.0
+    p_left.alignment = WD_ALIGN_PARAGRAPH.LEFT
+    r_left = p_left.add_run("BỘ GIÁO DỤC VÀ ĐÀO TẠO")
+    r_left.font.name, r_left.font.size = 'Times New Roman', Pt(16)
+    
+    p_right = table.cell(0, 1).paragraphs[0]
+    p_right.paragraph_format.space_after = Pt(0)
+    p_right.paragraph_format.line_spacing = 1.0
+    p_right.alignment = WD_ALIGN_PARAGRAPH.RIGHT
+    r_right = p_right.add_run("BỘ Y TẾ")
+    r_right.font.name, r_right.font.size = 'Times New Roman', Pt(16)
+    
+    # Ép buộc 1 dòng trống ngay giữa 2 hàng chữ đầu tiên
+    add_empty_lines(doc, 1, 16)
+    
+    add_cover_para(doc, "ĐẠI HỌC Y DƯỢC THÀNH PHỐ HỒ CHÍ MINH", 16, True)
+
+    logo_path = "logo_UMP.png"
+    logo_added = False
+    
+    if insert_logo and os.path.exists(logo_path):
+        add_empty_lines(doc, 1, 16)
+        try:
+            p_logo = doc.add_paragraph()
+            p_logo.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            p_logo.paragraph_format.space_after = Pt(0)
+            p_logo.paragraph_format.line_spacing = 1.0
+            r_logo = p_logo.add_run()
+            r_logo.add_picture(logo_path, width=Cm(3.5)) 
+            logo_added = True
+        except Exception:
+            pass
+
+    add_empty_lines(doc, spaces[0], 16)
+    add_cover_para(doc, author_name.upper(), 16, True)
+    
+    add_empty_lines(doc, spaces[1], 16)
+    add_cover_para(doc, thesis_title.upper(), 20, True)
+
+    return logo_added
 
 # ==========================================
 # NÚT XỬ LÝ VÀ TẠO FILE WORD
@@ -356,62 +405,23 @@ if st.button("✨ TẠO FILE WORD HOÀN CHỈNH", type="primary", use_container_
             sec_0.left_margin, sec_0.right_margin = Cm(3.5), Cm(2.0)
             add_page_border(sec_0._sectPr)
 
-            has_logo = os.path.exists("logo_UMP.png")
-            # Mặc định khoảng trống bìa 1: [Trên tác giả, Trên đề tài, Trên chữ Đề cương, Trên đáy TPHCM]
-            defaults_1 = [2, 1, 3, 6] if has_logo else [4, 1, 3, 9]
+            # Vì bỏ khoảng trắng dư thừa, mặt giấy sẽ có nhiều không gian hơn.
+            # Mảng defaults: [Trên Tác giả, Trên Tiêu đề, Trên Đề cương, Trên Đáy]
+            defaults_1 = [5, 2, 4, 15] 
             excess_1 = max(0, title_lines - 1)
             spaces_1 = distribute_spaces(defaults_1, excess_1)
 
-            # Header Bìa 1 (2 dòng sát nhau)
-            table = doc.add_table(rows=1, cols=2)
-            p_left = table.cell(0, 0).paragraphs[0]
-            p_left.alignment = WD_ALIGN_PARAGRAPH.LEFT
-            r_left = p_left.add_run("BỘ GIÁO DỤC VÀ ĐÀO TẠO")
-            r_left.font.name, r_left.font.size = 'Times New Roman', Pt(16)
+            logo_inserted_1 = render_cover_header_and_title(doc, author_name, thesis_title, spaces_1, insert_logo=True)
             
-            p_right = table.cell(0, 1).paragraphs[0]
-            p_right.alignment = WD_ALIGN_PARAGRAPH.RIGHT
-            r_right = p_right.add_run("BỘ Y TẾ")
-            r_right.font.name, r_right.font.size = 'Times New Roman', Pt(16)
+            add_empty_lines(doc, spaces_1[2], 16)
+            add_cover_para(doc, "ĐỀ CƯƠNG LUẬN VĂN THẠC SĨ", 16, True)
             
-            p = doc.add_paragraph()
-            p.alignment = WD_ALIGN_PARAGRAPH.CENTER
-            r = p.add_run("ĐẠI HỌC Y DƯỢC THÀNH PHỐ HỒ CHÍ MINH")
-            r.bold, r.font.name, r.font.size = True, 'Times New Roman', Pt(16)
-
-            if has_logo:
-                add_empty_lines(doc, 1) # Có 1 khoảng cách xuống logo để nó không dính vào chữ ĐHYD
-                try:
-                    p_logo = doc.add_paragraph()
-                    p_logo.alignment = WD_ALIGN_PARAGRAPH.CENTER
-                    r_logo = p_logo.add_run()
-                    r_logo.add_picture("logo_UMP.png", width=Cm(3.5)) 
-                except Exception:
-                    pass
-
-            add_empty_lines(doc, spaces_1[0])
-            p = doc.add_paragraph()
-            p.alignment = WD_ALIGN_PARAGRAPH.CENTER
-            r = p.add_run(author_name.upper())
-            r.bold, r.font.name, r.font.size = True, 'Times New Roman', Pt(16)
-            
-            add_empty_lines(doc, spaces_1[1])
-            p = doc.add_paragraph()
-            p.alignment = WD_ALIGN_PARAGRAPH.CENTER
-            r = p.add_run(thesis_title.upper())
-            r.bold, r.font.name, r.font.size = True, 'Times New Roman', Pt(20)
-
-            add_empty_lines(doc, spaces_1[2])
-            p = doc.add_paragraph()
-            p.alignment = WD_ALIGN_PARAGRAPH.CENTER
-            r = p.add_run("ĐỀ CƯƠNG LUẬN VĂN THẠC SĨ")
-            r.bold, r.font.name, r.font.size = True, 'Times New Roman', Pt(16)
-
-            add_empty_lines(doc, spaces_1[3])
-            p = doc.add_paragraph()
-            p.alignment = WD_ALIGN_PARAGRAPH.CENTER
-            r = p.add_run("THÀNH PHỐ HỒ CHÍ MINH - NĂM 2026")
-            r.bold, r.font.name, r.font.size = True, 'Times New Roman', Pt(16)
+            bottom_space_1 = spaces_1[3]
+            if logo_inserted_1:
+                bottom_space_1 = max(1, bottom_space_1 - 6) # Trừ hao không gian 6 dòng cho Logo
+                
+            add_empty_lines(doc, bottom_space_1, 16)
+            add_cover_para(doc, "THÀNH PHỐ HỒ CHÍ MINH - NĂM 2026", 16, True)
 
             # =====================================
             # SECTION 2: TRANG BÌA PHỤ (KHÔNG LOGO)
@@ -422,95 +432,43 @@ if st.button("✨ TẠO FILE WORD HOÀN CHỈNH", type="primary", use_container_
             add_page_border(new_section_cover_2._sectPr)
 
             has_sup2 = bool(supervisor_2.strip())
-            # Khoảng trống mặc định bìa 2. Luôn đảm bảo tối thiểu >= 1 ở mọi khe.
-            defaults_2 = [2, 1, 1, 1, 1, 1, 1] 
-            if has_sup2:
-                defaults_2.append(1) # Khe giữa 2 người HD
-            defaults_2.append(5) # Khe neo đáy
             
-            excess_2 = (2 if has_sup2 else 0) + max(0, title_lines - 1)
+            # Mảng defaults 2: Từng khe trống dọc theo trang bìa phụ (Tối thiểu luôn tự động ép >= 1)
+            defaults_2 = [5, 2, 2, 2, 2, 2, 2] 
+            if has_sup2:
+                defaults_2.append(2) # Khe giữa 2 người HD
+                defaults_2.append(8) # Khe neo đáy
+            else:
+                defaults_2.append(10) # Khe neo đáy
+            
+            excess_2 = max(0, title_lines - 1)
             spaces_2 = distribute_spaces(defaults_2, excess_2)
 
-            # Header Bìa 2 (2 dòng sát nhau)
-            table = doc.add_table(rows=1, cols=2)
-            p_left = table.cell(0, 0).paragraphs[0]
-            p_left.alignment = WD_ALIGN_PARAGRAPH.LEFT
-            r_left = p_left.add_run("BỘ GIÁO DỤC VÀ ĐÀO TẠO")
-            r_left.font.name, r_left.font.size = 'Times New Roman', Pt(16)
+            render_cover_header_and_title(doc, author_name, thesis_title, spaces_2, insert_logo=False)
             
-            p_right = table.cell(0, 1).paragraphs[0]
-            p_right.alignment = WD_ALIGN_PARAGRAPH.RIGHT
-            r_right = p_right.add_run("BỘ Y TẾ")
-            r_right.font.name, r_right.font.size = 'Times New Roman', Pt(16)
-            
-            p = doc.add_paragraph()
-            p.alignment = WD_ALIGN_PARAGRAPH.CENTER
-            r = p.add_run("ĐẠI HỌC Y DƯỢC THÀNH PHỐ HỒ CHÍ MINH")
-            r.bold, r.font.name, r.font.size = True, 'Times New Roman', Pt(16)
+            add_empty_lines(doc, spaces_2[2], 16)
+            add_cover_para(doc, "NGÀNH: KỸ THUẬT PHỤC HỒI CHỨC NĂNG", 16, True)
 
-            add_empty_lines(doc, spaces_2[0])
-            p = doc.add_paragraph()
-            p.alignment = WD_ALIGN_PARAGRAPH.CENTER
-            r = p.add_run(author_name.upper())
-            r.bold, r.font.name, r.font.size = True, 'Times New Roman', Pt(16)
-            
-            add_empty_lines(doc, spaces_2[1])
-            p = doc.add_paragraph()
-            p.alignment = WD_ALIGN_PARAGRAPH.CENTER
-            r = p.add_run(thesis_title.upper())
-            r.bold, r.font.name, r.font.size = True, 'Times New Roman', Pt(20)
+            add_empty_lines(doc, spaces_2[3], 16)
+            add_cover_para(doc, "MÃ SỐ: 8720603", 16, True)
 
-            add_empty_lines(doc, spaces_2[2])
-            p = doc.add_paragraph()
-            p.alignment = WD_ALIGN_PARAGRAPH.CENTER
-            r = p.add_run("NGÀNH: KỸ THUẬT PHỤC HỒI CHỨC NĂNG")
-            r.bold, r.font.name, r.font.size = True, 'Times New Roman', Pt(16)
+            add_empty_lines(doc, spaces_2[4], 16)
+            add_cover_para(doc, "ĐỀ CƯƠNG LUẬN VĂN THẠC SĨ", 16, True)
 
-            add_empty_lines(doc, spaces_2[3])
-            p = doc.add_paragraph()
-            p.alignment = WD_ALIGN_PARAGRAPH.CENTER
-            r = p.add_run("MÃ SỐ: 8720603")
-            r.bold, r.font.name, r.font.size = True, 'Times New Roman', Pt(16)
+            add_empty_lines(doc, spaces_2[5], 16)
+            add_cover_para(doc, "NGƯỜI DỰ KIẾN HƯỚNG DẪN KHOA HỌC:", 16, True)
 
-            add_empty_lines(doc, spaces_2[4])
-            p = doc.add_paragraph()
-            p.alignment = WD_ALIGN_PARAGRAPH.CENTER
-            r = p.add_run("ĐỀ CƯƠNG LUẬN VĂN THẠC SĨ")
-            r.bold, r.font.name, r.font.size = True, 'Times New Roman', Pt(16)
-
-            add_empty_lines(doc, spaces_2[5])
-            p = doc.add_paragraph()
-            p.alignment = WD_ALIGN_PARAGRAPH.CENTER
-            r = p.add_run("NGƯỜI DỰ KIẾN HƯỚNG DẪN KHOA HỌC:")
-            r.bold, r.font.name, r.font.size = True, 'Times New Roman', Pt(16)
-
-            add_empty_lines(doc, spaces_2[6])
+            add_empty_lines(doc, spaces_2[6], 16)
             if not has_sup2:
-                p = doc.add_paragraph()
-                p.alignment = WD_ALIGN_PARAGRAPH.CENTER
-                r = p.add_run(f"{supervisor_1.upper()}")
-                r.bold, r.font.name, r.font.size = True, 'Times New Roman', Pt(16)
-                
-                add_empty_lines(doc, spaces_2[7]) # Anchor space
+                add_cover_para(doc, f"{supervisor_1.upper()}", 16, True)
+                add_empty_lines(doc, spaces_2[7], 16)
             else:
-                p = doc.add_paragraph()
-                p.alignment = WD_ALIGN_PARAGRAPH.CENTER
-                r = p.add_run(f"1. {supervisor_1.upper()}")
-                r.bold, r.font.name, r.font.size = True, 'Times New Roman', Pt(16)
-                
-                add_empty_lines(doc, spaces_2[7])
-                
-                p = doc.add_paragraph()
-                p.alignment = WD_ALIGN_PARAGRAPH.CENTER
-                r = p.add_run(f"2. {supervisor_2.upper()}")
-                r.bold, r.font.name, r.font.size = True, 'Times New Roman', Pt(16)
-                
-                add_empty_lines(doc, spaces_2[8]) # Anchor space
+                add_cover_para(doc, f"1. {supervisor_1.upper()}", 16, True)
+                add_empty_lines(doc, spaces_2[7], 16)
+                add_cover_para(doc, f"2. {supervisor_2.upper()}", 16, True)
+                add_empty_lines(doc, spaces_2[8], 16)
 
-            p = doc.add_paragraph()
-            p.alignment = WD_ALIGN_PARAGRAPH.CENTER
-            r = p.add_run("THÀNH PHỐ HỒ CHÍ MINH - NĂM 2026")
-            r.bold, r.font.name, r.font.size = True, 'Times New Roman', Pt(16)
+            add_cover_para(doc, "THÀNH PHỐ HỒ CHÍ MINH - NĂM 2026", 16, True)
 
             # =====================================
             # SECTION 3: CÁC TRANG DANH MỤC ĐỆM (SỐ LA MÃ)
@@ -561,7 +519,7 @@ if st.button("✨ TẠO FILE WORD HOÀN CHỈNH", type="primary", use_container_
             add_page_number(header_para_main) 
             set_pgnum_type(new_section_content._sectPr, fmt='decimal', start='1')
 
-            # Bắt buộc xuất "ĐẶT VẤN ĐỀ"
+            # Luôn bắt buộc xuất phần Đặt vấn đề
             add_main_heading(doc, "ĐẶT VẤN ĐỀ")
             if dat_van_de_content.strip():
                 add_normal_text(doc, dat_van_de_content)
@@ -598,6 +556,6 @@ if st.button("✨ TẠO FILE WORD HOÀN CHỈNH", type="primary", use_container_
             doc.save(bio)
             
             st.success("🎉 Đã xuất file thành công!")
-            st.info("💡 **LƯU Ý:** Thuật toán chống tràn tự động rút ngắn các dòng trống dư thừa. Khung mục lục cũng đã được căn lề siêu chuẩn!")
-            st.download_button("⬇️ TẢI FILE ĐỀ CƯƠNG LUẬN VĂN (.docx)", bio.getvalue(), "De_Cuong_Hoan_Chinh_Co_Logo.docx", 
+            st.info("💡 **LƯU Ý:** Thuật toán chống tràn đã làm sạch mọi rác định dạng. Các trang đệm (i, ii...) và trang nội dung (1, 2...) đều đã được phân biệt rạch ròi!")
+            st.download_button("⬇️ TẢI FILE ĐỀ CƯƠNG LUẬN VĂN (.docx)", bio.getvalue(), "De_Cuong_Hoan_Chinh_Chong_Tran.docx", 
                                "application/vnd.openxmlformats-officedocument.wordprocessingml.document", use_container_width=True)
