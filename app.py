@@ -12,7 +12,7 @@ import io
 st.set_page_config(page_title="Tạo Đề Cương Luận Văn", page_icon="🎓", layout="centered")
 
 st.title("🎓 Trình Tạo Đề Cương Luận Văn Chuẩn")
-st.write("Hệ thống tự động dàn trang bìa có khung viền và ép chuẩn font toàn bộ nội dung.")
+st.write("Hệ thống tự động dàn trang bìa chính, trang bìa phụ (có khung viền) và ép chuẩn font toàn bộ nội dung.")
 st.divider()
 
 # ==========================================
@@ -80,6 +80,11 @@ def apply_academic_rules(node):
 st.header("I. THÔNG TIN BÌA")
 thesis_title = st.text_input("Tên Đề tài Luận văn:", placeholder="Ví dụ: HIỆU QUẢ CỦA CHƯƠNG TRÌNH CAN THIỆP HABIT-ILE...")
 author_name = st.text_input("Họ và tên tác giả:", placeholder="Ví dụ: TRẦN MINH HOÀNG")
+
+st.markdown("##### Người hướng dẫn khoa học")
+supervisor_1 = st.text_input("1. Họ và tên người hướng dẫn 1:", placeholder="Ví dụ: PGS.TS. NGUYỄN VĂN A")
+supervisor_2 = st.text_input("2. Họ và tên người hướng dẫn 2 (Bỏ trống nếu không có):", placeholder="Ví dụ: TS. TRẦN THỊ B")
+
 st.divider()
 
 st.header("II. NỘI DUNG")
@@ -161,96 +166,139 @@ def write_sections_to_word(doc, children_list, prefix_list):
             if child.get("children"):
                 write_sections_to_word(doc, child["children"], current_prefix)
 
+def render_cover_header_and_title(doc, author_name, thesis_title):
+    """Hàm gộp dùng chung cho cả 2 trang bìa (Phần đầu)"""
+    table = doc.add_table(rows=1, cols=2)
+    p_left = table.cell(0, 0).paragraphs[0]
+    p_left.alignment = WD_ALIGN_PARAGRAPH.LEFT
+    r_left = p_left.add_run("BỘ GIÁO DỤC VÀ ĐÀO TẠO")
+    r_left.font.name, r_left.font.size = 'Times New Roman', Pt(16)
+    
+    p_right = table.cell(0, 1).paragraphs[0]
+    p_right.alignment = WD_ALIGN_PARAGRAPH.RIGHT
+    r_right = p_right.add_run("BỘ Y TẾ")
+    r_right.font.name, r_right.font.size = 'Times New Roman', Pt(16)
+    
+    p = doc.add_paragraph()
+    p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    r = p.add_run("ĐẠI HỌC Y DƯỢC THÀNH PHỐ HỒ CHÍ MINH")
+    r.bold, r.font.name, r.font.size = True, 'Times New Roman', Pt(16)
+    
+    add_empty_lines(doc, 4)
+    p = doc.add_paragraph()
+    p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    r = p.add_run(author_name.upper())
+    r.bold, r.font.name, r.font.size = True, 'Times New Roman', Pt(16)
+    
+    add_empty_lines(doc, 1)
+    p = doc.add_paragraph()
+    p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    r = p.add_run(thesis_title.upper())
+    r.bold, r.font.name, r.font.size = True, 'Times New Roman', Pt(20)
+
+
 # ==========================================
 # NÚT XỬ LÝ VÀ TẠO FILE WORD
 # ==========================================
 if st.button("✨ TẠO FILE WORD HOÀN CHỈNH", type="primary", use_container_width=True):
-    if not thesis_title:
-        st.warning("⚠️ Vui lòng nhập Tên Đề tài ở phần Thông tin bìa!")
+    if not thesis_title or not supervisor_1:
+        st.warning("⚠️ Vui lòng nhập Tên Đề tài và ít nhất 1 Người hướng dẫn ở phần Thông tin bìa!")
     else:
-        with st.spinner("Đang biên dịch trang bìa và dàn trang nội dung..."):
+        with st.spinner("Đang biên dịch trang bìa chính, bìa phụ và dàn trang nội dung..."):
             processed_chapters = [apply_academic_rules(chap) for chap in chapters_data]
 
             doc = docx.Document()
+            style_normal = doc.styles['Normal']
+            style_normal.font.name, style_normal.font.size = 'Times New Roman', Pt(13)
+
+            # Số dòng của Tên đề tài để trừ hao tính neo chữ TPHCM
+            title_lines = (len(thesis_title) // 40) + 1
+
+            # =====================================
+            # SECTION 1: TRANG BÌA CHÍNH
+            # =====================================
             sec_0 = doc.sections[0]
             sec_0.top_margin, sec_0.bottom_margin = Cm(3.5), Cm(3.0)
             sec_0.left_margin, sec_0.right_margin = Cm(3.5), Cm(2.0)
             add_page_border(sec_0._sectPr)
 
-            style_normal = doc.styles['Normal']
-            style_normal.font.name, style_normal.font.size = 'Times New Roman', Pt(13)
-
-            # =====================================
-            # THIẾT KẾ TRANG BÌA
-            # =====================================
+            render_cover_header_and_title(doc, author_name, thesis_title)
             
-            # Hàng 1: BỘ GD&ĐT (Trái) - BỘ Y TẾ (Phải)
-            table = doc.add_table(rows=1, cols=2)
-            p_left = table.cell(0, 0).paragraphs[0]
-            p_left.alignment = WD_ALIGN_PARAGRAPH.LEFT
-            r_left = p_left.add_run("BỘ GIÁO DỤC VÀ ĐÀO TẠO")
-            r_left.font.name, r_left.font.size = 'Times New Roman', Pt(16)
-            
-            p_right = table.cell(0, 1).paragraphs[0]
-            p_right.alignment = WD_ALIGN_PARAGRAPH.RIGHT
-            r_right = p_right.add_run("BỘ Y TẾ")
-            r_right.font.name, r_right.font.size = 'Times New Roman', Pt(16)
-            
-            # Hàng 2: ĐẠI HỌC Y DƯỢC (Xuống dòng ngay, không có khoảng cách trống)
-            p = doc.add_paragraph()
-            p.alignment = WD_ALIGN_PARAGRAPH.CENTER
-            r = p.add_run("ĐẠI HỌC Y DƯỢC THÀNH PHỐ HỒ CHÍ MINH")
-            r.bold = True
-            r.font.name, r.font.size = 'Times New Roman', Pt(16)
-            
-            # Xuống dòng 4 hàng -> HỌ VÀ TÊN
-            add_empty_lines(doc, 4)
-            p = doc.add_paragraph()
-            p.alignment = WD_ALIGN_PARAGRAPH.CENTER
-            r = p.add_run(author_name.upper())
-            r.bold = True
-            r.font.name, r.font.size = 'Times New Roman', Pt(16)
-            
-            # Xuống dòng 1 hàng -> TÊN ĐỀ TÀI
-            add_empty_lines(doc, 1)
-            p = doc.add_paragraph()
-            p.alignment = WD_ALIGN_PARAGRAPH.CENTER
-            r = p.add_run(thesis_title.upper())
-            r.bold = True
-            r.font.name, r.font.size = 'Times New Roman', Pt(20)
-            
-            # Xuống dòng 3 hàng -> ĐỀ CƯƠNG LUẬN VĂN
             add_empty_lines(doc, 3)
             p = doc.add_paragraph()
             p.alignment = WD_ALIGN_PARAGRAPH.CENTER
             r = p.add_run("ĐỀ CƯƠNG LUẬN VĂN THẠC SĨ")
-            r.bold = True
-            r.font.name, r.font.size = 'Times New Roman', Pt(16)
+            r.bold, r.font.name, r.font.size = True, 'Times New Roman', Pt(16)
             
-            # ----------------------------------------------------
-            # THUẬT TOÁN TÍNH TOÁN NEO ĐÁY TRANG ĐÃ SỬA LỖI LẦN 2
-            # ----------------------------------------------------
-            title_lines = (len(thesis_title) // 40) + 1
-            
-            # Giảm chính xác 1 dòng trống cuối cùng
+            # Neo đáy trang bìa chính
             empty_lines_to_bottom = 8 - title_lines
-            
-            if empty_lines_to_bottom < 1: 
-                empty_lines_to_bottom = 1
-                
+            if empty_lines_to_bottom < 1: empty_lines_to_bottom = 1
             add_empty_lines(doc, empty_lines_to_bottom)
             
             p = doc.add_paragraph()
             p.alignment = WD_ALIGN_PARAGRAPH.CENTER
             r = p.add_run("THÀNH PHỐ HỒ CHÍ MINH - NĂM 2026")
-            r.bold = True
-            r.font.name, r.font.size = 'Times New Roman', Pt(16)
+            r.bold, r.font.name, r.font.size = True, 'Times New Roman', Pt(16)
 
             # =====================================
-            # NGẮT TRANG - BẮT ĐẦU PHẦN NỘI DUNG
+            # SECTION 2: TRANG BÌA PHỤ (CÓ KHUNG VIỀN)
             # =====================================
-            new_section = doc.add_section(WD_SECTION.NEW_PAGE)
-            clear_page_border(new_section._sectPr)
+            new_section_cover_2 = doc.add_section(WD_SECTION.NEW_PAGE)
+            new_section_cover_2.top_margin, new_section_cover_2.bottom_margin = Cm(3.5), Cm(3.0)
+            new_section_cover_2.left_margin, new_section_cover_2.right_margin = Cm(3.5), Cm(2.0)
+            add_page_border(new_section_cover_2._sectPr) # Tiếp tục đóng khung
+
+            render_cover_header_and_title(doc, author_name, thesis_title)
+
+            add_empty_lines(doc, 1)
+            p = doc.add_paragraph()
+            p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            r = p.add_run("NGÀNH: KỸ THUẬT PHỤC HỒI CHỨC NĂNG")
+            r.bold, r.font.name, r.font.size = True, 'Times New Roman', Pt(16)
+
+            p = doc.add_paragraph()
+            p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            r = p.add_run("MÃ SỐ: 8720603")
+            r.bold, r.font.name, r.font.size = True, 'Times New Roman', Pt(16)
+
+            add_empty_lines(doc, 1)
+            p = doc.add_paragraph()
+            p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            r = p.add_run("ĐỀ CƯƠNG LUẬN VĂN THẠC SĨ")
+            r.bold, r.font.name, r.font.size = True, 'Times New Roman', Pt(16)
+
+            add_empty_lines(doc, 1)
+            p = doc.add_paragraph()
+            p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            r = p.add_run("NGƯỜI DỰ KIẾN HƯỚNG DẪN KHOA HỌC:")
+            r.bold, r.font.name, r.font.size = True, 'Times New Roman', Pt(16)
+
+            p = doc.add_paragraph()
+            p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            r = p.add_run(f"1. {supervisor_1.upper()}")
+            r.bold, r.font.name, r.font.size = True, 'Times New Roman', Pt(16)
+
+            if supervisor_2.strip():
+                p = doc.add_paragraph()
+                p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                r = p.add_run(f"2. {supervisor_2.upper()}")
+                r.bold, r.font.name, r.font.size = True, 'Times New Roman', Pt(16)
+
+            # Trừ bớt các dòng nội dung mới thêm vào để tiếp tục neo đúng đáy trang
+            empty_lines_inner = 4 - title_lines - (1 if supervisor_2.strip() else 0)
+            if empty_lines_inner < 1: empty_lines_inner = 1
+            add_empty_lines(doc, empty_lines_inner)
+
+            p = doc.add_paragraph()
+            p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            r = p.add_run("THÀNH PHỐ HỒ CHÍ MINH - NĂM 2026")
+            r.bold, r.font.name, r.font.size = True, 'Times New Roman', Pt(16)
+
+            # =====================================
+            # SECTION 3: NGẮT TRANG - BẮT ĐẦU PHẦN NỘI DUNG
+            # =====================================
+            new_section_content = doc.add_section(WD_SECTION.NEW_PAGE)
+            clear_page_border(new_section_content._sectPr) # Gỡ khung viền từ đây trở đi
 
             if dat_van_de_content.strip():
                 add_main_heading(doc, "ĐẶT VẤN ĐỀ")
