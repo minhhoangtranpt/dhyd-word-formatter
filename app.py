@@ -3,8 +3,7 @@ import docx
 from docx.shared import Cm, Pt
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.enum.section import WD_SECTION
-from docx.oxml.xmlchemy import OxmlElement
-from docx.oxml.ns import qn  # <--- Dòng này đã được sửa lại cho chuẩn
+from docx.oxml.shared import OxmlElement, qn  # Đã gộp và sửa lại đường dẫn chuẩn tại đây
 import io
 
 # ==========================================
