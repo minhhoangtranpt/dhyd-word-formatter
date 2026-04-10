@@ -119,7 +119,7 @@ st.divider()
 # CÁC HÀM HỖ TRỢ XUẤT FILE WORD
 # ==========================================
 def add_empty_lines(doc, num_lines, size=16):
-    for _ in range(num_lines):
+    for _ in range(int(num_lines)):
         p = doc.add_paragraph()
         r = p.add_run()
         r.font.size = Pt(size)
@@ -196,8 +196,7 @@ if st.button("✨ TẠO FILE WORD HOÀN CHỈNH", type="primary", use_container_
             r_right = p_right.add_run("BỘ Y TẾ")
             r_right.font.name, r_right.font.size = 'Times New Roman', Pt(16)
             
-            # Xuống dòng (1 dòng ẩn) -> ĐẠI HỌC Y DƯỢC
-            add_empty_lines(doc, 1)
+            # Hàng 2: ĐẠI HỌC Y DƯỢC (Xuống dòng ngay, không có khoảng cách trống)
             p = doc.add_paragraph()
             p.alignment = WD_ALIGN_PARAGRAPH.CENTER
             r = p.add_run("ĐẠI HỌC Y DƯỢC THÀNH PHỐ HỒ CHÍ MINH")
@@ -229,17 +228,15 @@ if st.button("✨ TẠO FILE WORD HOÀN CHỈNH", type="primary", use_container_
             r.font.name, r.font.size = 'Times New Roman', Pt(16)
             
             # ----------------------------------------------------
-            # THUẬT TOÁN ĐẨY CHỮ "TPHCM - NĂM 2026" XUỐNG ĐÁY
+            # THUẬT TOÁN TÍNH TOÁN NEO ĐÁY TRANG
             # ----------------------------------------------------
-            # Một dòng chữ size 20 in đậm chứa khoảng 40 ký tự trên khổ A4
-            # Ta tính số dòng mà tên đề tài đã chiếm
+            # Một dòng chữ size 20 in đậm chứa khoảng 40 ký tự.
             title_lines = (len(thesis_title) // 40) + 1
             
-            # Cấu hình 14 dòng trống là vừa đủ đẩy sát lề (đối với tên đề tài 1 dòng)
-            # Nếu tên đề tài dài thêm 1 dòng thì trừ đi 1 dòng trống, dài 2 dòng thì trừ 2...
-            empty_lines_to_bottom = 14 - title_lines
+            # Tổng số dòng chứa được ở khoảng trống còn lại của trang A4 chuẩn ĐHYD là khoảng 22 dòng.
+            # Trừ đi số dòng giãn nở của Tên đề tài (size 20 bự hơn size 16 nên nhân hệ số 1.5)
+            empty_lines_to_bottom = 22 - int(title_lines * 1.5)
             
-            # Đảm bảo tối thiểu vẫn còn 1 khoảng trống an toàn để không bị lỗi
             if empty_lines_to_bottom < 1: 
                 empty_lines_to_bottom = 1
                 
