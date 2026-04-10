@@ -3,6 +3,7 @@ import docx
 from docx.shared import Cm, Pt, RGBColor
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.enum.section import WD_SECTION
+from docx.enum.style import WD_STYLE_TYPE
 from docx.oxml.shared import OxmlElement, qn
 import io
 
@@ -16,7 +17,7 @@ st.write("Hệ thống tự động dàn trang, tạo MỤC LỤC TỰ ĐỘNG, 
 st.divider()
 
 # ==========================================
-# CÁC HÀM CAN THIỆP XML 
+# CÁC HÀM CAN THIỆP XML & STYLE MỤC LỤC
 # ==========================================
 def add_page_border(sect_pr):
     borders = OxmlElement('w:pgBorders')
@@ -52,6 +53,34 @@ def add_page_number(paragraph):
     run.append(fldChar3)
     p.append(run)
 
+def setup_toc_styles(doc):
+    """Ép chuẩn định dạng cho Mục lục tự động theo quy định ĐHYD"""
+    for i in range(1, 4):
+        style_name = f'TOC {i}'
+        try:
+            style = doc.styles[style_name]
+        except KeyError:
+            style = doc.styles.add_style(style_name, WD_STYLE_TYPE.PARAGRAPH)
+        
+        # 1. Cỡ chữ 13, Times New Roman, CHỮ THƯỜNG (Không in đậm)
+        style.font.name = 'Times New Roman'
+        style.font.size = Pt(13)
+        style.font.bold = False 
+        
+        # 2. Căn lề thẳng cột và thụt đầu dòng treo (Hanging Indent = 1 tab = 1.27cm)
+        if i == 1:
+            # Chương: Thụt dòng 2 vào 1 tab
+            style.paragraph_format.left_indent = Cm(1.27)
+            style.paragraph_format.first_line_indent = Cm(-1.27)
+        elif i == 2:
+            # Tiểu mục cấp 1: Thẳng cột với chương
+            style.paragraph_format.left_indent = Cm(1.27)
+            style.paragraph_format.first_line_indent = Cm(-1.27)
+        elif i == 3:
+            # Tiểu mục cấp 2: Thụt vô thêm 1 chút
+            style.paragraph_format.left_indent = Cm(2.27)
+            style.paragraph_format.first_line_indent = Cm(-1.27)
+
 def add_toc_to_doc(doc):
     p = doc.add_paragraph()
     p.alignment = WD_ALIGN_PARAGRAPH.CENTER
@@ -71,7 +100,6 @@ def add_toc_to_doc(doc):
     
     instrText = OxmlElement('w:instrText')
     instrText.set(qn('xml:space'), 'preserve')
-    # Phục hồi mã \u để quét lại toàn bộ các Heading 1
     instrText.text = r'TOC \o "1-3" \h \z \u'
     
     fldChar2 = OxmlElement('w:fldChar')
@@ -199,7 +227,6 @@ def add_empty_lines(doc, num_lines, size=16):
         r.font.size = Pt(size)
 
 def add_main_heading(doc, text):
-    # Trả toàn bộ lại thành Heading 1 để TOC tự động nhận diện
     try:
         p = doc.add_paragraph(style='Heading 1')
     except KeyError:
@@ -294,6 +321,10 @@ if st.button("✨ TẠO FILE WORD HOÀN CHỈNH", type="primary", use_container_
             all_chapters = [c1_processed, c2_processed, c3_processed, c4_processed]
 
             doc = docx.Document()
+            
+            # Khởi tạo định dạng cho TOC
+            setup_toc_styles(doc)
+            
             style_normal = doc.styles['Normal']
             style_normal.font.name, style_normal.font.size = 'Times New Roman', Pt(13)
 
@@ -307,7 +338,7 @@ if st.button("✨ TẠO FILE WORD HOÀN CHỈNH", type="primary", use_container_
             title_lines = (len(thesis_title) // 40) + 1
 
             # =====================================
-            # SECTION 1: TRANG BÌA CHÍNH
+            # SECTION 1: TRANG BÌA CHÍNH (KHÔNG SỐ TRANG)
             # =====================================
             sec_0 = doc.sections[0]
             sec_0.top_margin, sec_0.bottom_margin = Cm(3.5), Cm(3.0)
@@ -331,7 +362,7 @@ if st.button("✨ TẠO FILE WORD HOÀN CHỈNH", type="primary", use_container_
             r.bold, r.font.name, r.font.size = True, 'Times New Roman', Pt(16)
 
             # =====================================
-            # SECTION 2: TRANG BÌA PHỤ
+            # SECTION 2: TRANG BÌA PHỤ (KHÔNG SỐ TRANG)
             # =====================================
             new_section_cover_2 = doc.add_section(WD_SECTION.NEW_PAGE)
             new_section_cover_2.top_margin, new_section_cover_2.bottom_margin = Cm(3.5), Cm(3.0)
