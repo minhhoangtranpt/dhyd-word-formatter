@@ -4,7 +4,7 @@ from docx.shared import Cm, Pt
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.enum.section import WD_SECTION
 from docx.oxml.xmlchemy import OxmlElement
-from docx.oxml.shared import qn
+from docx.oxml.ns import qn  # <--- Dòng này đã được sửa lại cho chuẩn
 import io
 
 # ==========================================
